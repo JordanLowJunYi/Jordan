@@ -3,6 +3,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { FileText } from 'lucide-react';
 import { prefersReducedMotion } from '../../../../lib/motion';
+import { formatSpan, formatTotal } from '../../../../lib/dates';
 import TestimonialPanel from './TestimonialPanel';
 import type { Testimonial } from './TestimonialPanel';
 import type { ExperienceOrg, ExperienceRole } from '../../../../content/siteContent';
@@ -40,13 +41,15 @@ function Role({
       </p>
 
       {/* One subheader line: dates and where, nothing more */}
-      {(role.dates || role.location) && (
-        <p className="text-sm mt-0.5">
-          {role.dates && <span className="text-amber-300/80">{role.dates}</span>}
-          {role.dates && role.location && <span className="text-gray-600"> · </span>}
-          {role.location && <span className="text-gray-400">{role.location}</span>}
-        </p>
-      )}
+      <p className="text-sm mt-0.5">
+        <span className="text-amber-300/80">{formatSpan(role)}</span>
+        {role.location && (
+          <>
+            <span className="text-gray-600"> · </span>
+            <span className="text-gray-400">{role.location}</span>
+          </>
+        )}
+      </p>
 
       {role.testimonial && (
         <button
@@ -102,19 +105,25 @@ const Experience: React.FC<{ orgs: ExperienceOrg[] }> = ({ orgs }) => {
   return (
     <>
       <ol ref={rootRef} className="space-y-8">
-        {orgs.map((item) => {
+        {orgs.map((item, orgIndex) => {
           const connected = item.roles.length > 1;
+          // Total time at the organisation, shown only when it holds several roles.
+          const meta = [connected ? formatTotal(item.roles) : '', item.note ?? '']
+            .filter(Boolean)
+            .join(' · ');
           return (
             <li
               data-exp-org
-              key={item.org}
+              // The same organisation can appear twice (separate stints), so the
+              // name alone is not a unique key.
+              key={`${item.org}-${orgIndex}`}
               className="lg:grid lg:grid-cols-[minmax(0,10rem)_minmax(0,1fr)] lg:gap-5"
             >
               {/* Sidebar label. Same type size as the roles and as the neighbouring
                   Leadership card, so the whole row reads as one system. */}
               <div className="mb-2 lg:mb-0">
                 <h3 className="font-bold leading-snug text-white">{item.org}</h3>
-                {item.meta && <p className="text-sm text-gray-400 mt-0.5">{item.meta}</p>}
+                {meta && <p className="text-sm text-gray-400 mt-0.5">{meta}</p>}
               </div>
 
               <div className="relative">

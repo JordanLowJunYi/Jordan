@@ -14,6 +14,8 @@
 //                                and gets a menu entry automatically.
 // ============================================================================
 
+import type { DateSpan } from '../lib/dates';
+
 const BASE = import.meta.env.BASE_URL;
 
 // This site's own address, read at runtime so it stays correct wherever it is
@@ -63,17 +65,20 @@ export interface HighlightEntry {
 
 // A single role held at an organisation. Several of these under one `ExperienceOrg`
 // render as a connected stack, the way LinkedIn shows multiple roles at one employer.
-export interface ExperienceRole {
+// Dates are 'YYYY-MM' months. The page writes "Apr 2021 – Jan 2022 · 10 mos" from them,
+// and a role with no `end` reads "– Present" with its duration counted up to today.
+export interface ExperienceRole extends DateSpan {
   title: string;
-  dates?: string;                   // e.g. "Apr 2021 – Jan 2022 · 10 mos"
-  location?: string;                // e.g. "MD6"; joins `dates` on one subheader line
+  location?: string;                // e.g. "MD6"; joins the dates on one subheader line
   testimonial?: { label: string; href: string };
   href?: string;                    // optional link out (e.g. work produced in the role)
 }
 
 export interface ExperienceOrg {
   org: string;
-  meta?: string;                    // total span at this organisation, e.g. "5 yrs 1 mo"
+  // With two or more roles, the total time at the organisation is computed and shown
+  // under its name. `note` is extra text appended after it, e.g. the office ("Curie").
+  note?: string;
   roles: ExperienceRole[];
 }
 
@@ -117,7 +122,7 @@ export type Section =
 export const hero: HeroContent = {
   name: 'Jordan Low Jun Yi',
   tagline: 'Biomedical Engineering Student at NUS',
-  majors: 'Second Major in Computing • Specialization in Tissue Engineering • Specialization in Robotics • Minor in AI • Minor in Design',
+  majors: 'Second Major in Computing • Specialization in Tissue Engineering • Minor in AI • Minor in Innovation & Design',
   contacts: [
     {
       label: 'Email',
@@ -134,6 +139,12 @@ export const hero: HeroContent = {
       label: 'Google Scholar',
       display: 'Google Scholar profile',
       href: 'https://scholar.google.com/citations?hl=en&user=O6M8clAAAAAJ',
+      external: true,
+    },
+    {
+      label: 'GitHub',
+      display: 'github.com/doux124',
+      href: 'https://github.com/doux124',
       external: true,
     },
   ],
@@ -163,6 +174,10 @@ export const sections: Section[] = [
         ],
         image: `${BASE}images/Showcase/Organoid.png`,
         gradient: 'from-pink-500 to-purple-600',
+        link: {
+          label: 'Paper in Atherosclerosis (2026)',
+          href: 'https://doi.org/10.1016/j.atherosclerosis.2026.120762',
+        },
       },
       {
         id: 2,
@@ -198,10 +213,15 @@ export const sections: Section[] = [
         features: [
           'Began at IDEATE 2025 as a portable alternative to bulky intermittent pneumatic compression (IPC) devices',
           'Pivoted to replicating manual lymphatic drainage (MLD), the clinical gold standard, after therapist and patient validation',
-          'Aims to reach patients priced out of MLD (up to $200/session, rarely insured) or without access while travelling',
+          'A dual-plane pneumatic mechanism recreates the tangential skin stretch of MLD for patients priced out of it (up to S$200/session, rarely insured)',
           'Validated in stages: sponge, then ballistic-gel phantom with FITC-dextran, then user testing (SUS/QUEST)',
+          'IDEATE 2025 Champion (S$10,000 NUS VIP Grant) and EDIC INSPIRE 2026 Most Impactful Project',
         ],
         gradient: 'from-sky-500 to-indigo-600',
+        link: {
+          label: 'Our lymphedema network meta-analysis (Supportive Care in Cancer, 2026)',
+          href: 'https://doi.org/10.1007/s00520-026-11494-0',
+        },
       },
     ],
   },
@@ -240,6 +260,10 @@ export const sections: Section[] = [
         image: `${BASE}images/Showcase/liver_ultrasound.png`,
         imagePlate: '#ffffff',
         gradient: 'from-emerald-500 to-teal-600',
+        link: {
+          label: 'Co-first-author paper in J Gastroenterol Hepatol (2026)',
+          href: 'https://doi.org/10.1111/jgh.70763',
+        },
       },
       {
         id: 3,
@@ -251,6 +275,7 @@ export const sections: Section[] = [
           'Mapped 221 genomic risk loci with FUMA and MAGMA, recovering known lipid genes (LPL, CETP, APOA5)',
           'Uncovered enrichment of hepatocellular-carcinoma pathways, tying dyslipidemia to liver-cancer risk',
           'Linked significant variants to incident myocardial infarction with Cox proportional-hazards models',
+          'Presented as a first-author poster at the APASL 2026 Annual Meeting',
         ],
         visual: 'manhattan',
         gradient: 'from-emerald-500 to-teal-600',
@@ -273,10 +298,11 @@ export const sections: Section[] = [
         title: 'CARE-Liver: Fibrosis Staging on MRI',
         subtitle: 'A segmentation-to-staging deep-learning cascade for liver fibrosis on multi-vendor MRI',
         features: [
-          'Built a two-stage pipeline for the MICCAI CARE-Liver challenge, staging fibrosis from abdominal MRI',
+          'Built a two-stage pipeline for the MICCAI CARE-Liver challenge in the Digital Heart Lab, funded by a CDE REx Fellows\' Grant',
           'Fine-tuned TotalSegmentator-MRI in nnU-Net to segment the liver from just 30 scans (Dice 0.97)',
-          'Trained per-sequence 3D ResNet ensembles with missing-modality-robust late fusion',
+          'Staged fibrosis with per-sequence 3D ResNets and missing-modality-robust late fusion, validated with nested cross-validation',
           'Stayed self-contained at inference across heterogeneous vendors and missing sequences',
+          'First-author paper in press, MICCAI 2026 Satellite Events (Lecture Notes in Computer Science)',
         ],
         gradient: 'from-orange-500 to-rose-600',
         link: { label: 'Digital Heart Lab', href: 'https://digitalheartlab.com/people/jordan_low' },
@@ -294,7 +320,25 @@ export const sections: Section[] = [
     groups: [
       {
         heading: 'Publications',
+        wide: true,
         entries: [
+          {
+            title: 'Manual lymphatic drainage and pneumatic compression for breast-cancer-related lymphedema: a component network meta-analysis',
+            meta: 'Supportive Care in Cancer · 2026',
+            doi: '10.1007/s00520-026-11494-0',
+            note: 'First author',
+          },
+          {
+            title: 'Plain 2D ultrasound and clinical data for identifying at-risk MASH: a multicenter proof-of-concept study',
+            meta: 'Journal of Gastroenterology and Hepatology · 2026',
+            doi: '10.1111/jgh.70763',
+            note: 'Co-first author',
+          },
+          {
+            title: 'A transfer-learned segmentation-to-staging cascade for liver fibrosis staging on multi-vendor MRI',
+            meta: 'MICCAI 2026 Satellite Events (LNCS) · in press',
+            note: 'First author',
+          },
           {
             title: 'Prognosis of STEMI patients presenting to the ED without chest pain: a nationwide cohort study',
             meta: 'Heart · 2026',
@@ -304,6 +348,7 @@ export const sections: Section[] = [
             title: 'Diversity in MASLD: a framework for precision medicine',
             meta: 'npj Gut and Liver · 2026',
             doi: '10.1038/s44355-026-00061-3',
+            note: 'Co-first author',
           },
           {
             title: 'Fibro-inflammatory liver injury, not steatosis, predicts neuropsychiatric events and mortality (UK Biobank)',
@@ -319,6 +364,7 @@ export const sections: Section[] = [
       },
       {
         heading: 'UI/UX & Web Design',
+        wide: true,
         entries: [
           { title: 'This Portfolio', meta: SELF_DISPLAY, href: SELF_URL },
           {
@@ -347,10 +393,15 @@ export const sections: Section[] = [
         heading: 'Awards & Honours',
         wide: true,
         entries: [
-          { title: 'Innovation & Research Award 2026 (High Achievement)', meta: '2026' },
-          { title: 'IDEATE 2025 — Champion', meta: 'NUS · Oct 2025' },
+          { title: 'EDIC INSPIRE 2026 — Most Impactful Project (FreeStryde)', meta: 'NUS College of Design and Engineering · Nov 2026' },
+          { title: "REx Fellow — CDE Undergraduate Research Experience Fellows' Grant (S$5,000)", meta: 'NUS College of Design and Engineering · Aug 2026' },
+          { title: 'Innovation & Research Award 2026 (High Achievement)', meta: 'NUS · Jun 2026' },
+          { title: 'IDEATE 2025 — Champion (FreeStryde)', meta: 'NUS · Oct 2025', note: 'Out of 80+ teams; prize includes a S$10,000 NUS VIP Grant' },
+          { title: 'WorldQuant BRAIN Alphathon 2024 — 6th Place', meta: 'WorldQuant · Sep 2024' },
+          { title: 'Triple Distinction with Honours (Chemistry, Biology, Physics)', meta: 'NUS High School · 2022', note: 'The only student in the cohort to earn it' },
           { title: "Tan Kah Kee Young Inventors' Award (TKKYIA) — Silver", meta: 'Tan Kah Kee Foundation · Jul 2022' },
           { title: 'Global Youth Science & Technology Bowl (GYSTB) — Grand Prize (Gold)', meta: 'HK Federation of Youth Groups · May 2022' },
+          { title: 'Japan Super Science Fair — Invitation (shape-memory annuloplasty)', meta: '2022' },
           { title: 'International Elementz Fair (IEF) — Gold', meta: 'NTU · Apr 2022' },
           { title: 'Singapore Science & Engineering Fair (SSEF) — Gold', meta: 'SSEF · Mar 2022' },
           { title: 'Singapore Science & Engineering Fair (SSEF) — Silver', meta: 'SSEF · Mar 2022' },
@@ -358,8 +409,10 @@ export const sections: Section[] = [
           { title: 'National Robotics Competition — 2nd Runner Up', meta: 'Science Centre Singapore · Sep 2021' },
           { title: 'International Chemistry Tournament (IChTo) — Champion', meta: 'IChTo · Aug 2021' },
           { title: 'Singapore Chemistry Olympiad (SChO) — Gold', meta: 'Singapore National Institute of Chemistry · Jul 2021' },
+          { title: 'NUS Chemical Engineering Challenge — 2nd Runner-Up', meta: 'NUS · 2021' },
           { title: 'A*STAR Science Award (Junior College)', meta: 'A*STAR Singapore · Jan 2021' },
           { title: 'UK Intermediate Biology Olympiad — Gold', meta: 'UK Biology Competitions · Mar 2020' },
+          { title: 'International Science Youth Forum — Invitation (graphene biosensing)', meta: '2020' },
           { title: 'Singapore Junior Biology Olympiad (SJBO) — Gold', meta: 'May 2019' },
           { title: 'Singapore Junior Chemistry Olympiad (SJChO) — Gold', meta: 'May 2019' },
           { title: 'UK Biology Challenge — Gold', meta: 'UK Biology Competitions · Mar 2019' },
@@ -370,30 +423,47 @@ export const sections: Section[] = [
         span: 9,
         experience: [
           {
-            org: 'Agency for Science, Technology and Research (A*STAR)',
-            meta: '3 mos',
+            org: 'National University of Singapore',
             roles: [
-              { title: 'Innovation and Enterprise Intern', dates: 'May 2026 – Present · 3 mos', location: 'Kinesis, Innovis' },
-              { title: 'Institute of Molecular and Cell Biology Intern', dates: 'May 2026 – Present · 3 mos', location: 'Proteos' },
+              {
+                title: 'Machine Learning Researcher (REx Fellow)',
+                start: '2026-05',
+                location: 'Digital Heart Lab, NUS Biomedical Engineering',
+                href: 'https://digitalheartlab.com/people/jordan_low',
+              },
             ],
           },
           {
             org: 'NUS Yong Loo Lin School of Medicine',
-            meta: '5 yrs 1 mo',
             roles: [
-              { title: 'Research Staff', dates: 'Jun 2024 – Present · 2 yrs 2 mos', location: 'MD1, E7' },
-              { title: 'Cardiothoracic and Vascular Surgery Intern', dates: 'May 2022 · 1 mo', location: 'National University Hospital (NUH)' },
-              { title: 'Research Intern', dates: 'Jul 2021 – May 2022 · 11 mos', location: 'MD6' },
+              { title: 'Research Staff', start: '2024-06', location: 'MD1, E7' },
+              { title: 'Cardiothoracic and Vascular Surgery Intern', start: '2022-05', end: '2022-05', location: 'National University Hospital (NUH)' },
+              { title: 'Research Intern', start: '2021-07', end: '2022-05', location: 'MD6' },
+            ],
+          },
+          {
+            org: 'Agency for Science, Technology and Research (A*STAR)',
+            roles: [
+              {
+                title: 'Innovation and Enterprise Intern',
+                start: '2026-05', end: '2026-08',
+                location: 'Kinesis, Innovis',
+                testimonial: {
+                  label: 'Testimonial by David Sher, Deputy Director, Venture Creation & Market Access',
+                  href: `${BASE}testimonials/ASTAR_Testimonial_Jordan_Low.pdf`,
+                },
+              },
+              { title: 'Institute of Molecular and Cell Biology Intern', start: '2026-05', end: '2026-08', location: 'Proteos' },
             ],
           },
           {
             org: 'KosmodeHealth Singapore',
-            meta: '9 mos · Curie',
+            note: 'Curie',
             roles: [
-              { title: 'UI/UX Designer', dates: 'Mar 2025 – Oct 2025 · 8 mos', href: 'https://kosmodehealth.com/' },
+              { title: 'UI/UX Designer & Front-End Developer', start: '2025-03', end: '2025-10', href: 'https://kosmodehealth.com/' },
               {
                 title: 'Business Development Intern',
-                dates: 'Feb 2025 – Mar 2025 · 2 mos',
+                start: '2025-02', end: '2025-03',
                 testimonial: {
                   label: 'Testimonial by Florence Leong, Founder & Director',
                   href: `${BASE}testimonials/Kosmode_Testimonial_Jordan_Low.pdf`,
@@ -406,7 +476,7 @@ export const sections: Section[] = [
             roles: [
               {
                 title: 'Mechanical Designer Intern',
-                dates: 'Nov 2024 – Feb 2025 · 4 mos',
+                start: '2024-12', end: '2025-02',
                 location: '79 Ayer Rajah Crescent',
                 testimonial: {
                   label: 'Testimonial by Lim Eng Seng, Founder & Principal Engineer',
@@ -418,39 +488,38 @@ export const sections: Section[] = [
           {
             org: 'Singapore Army',
             roles: [
-              { title: 'Combat Medic', dates: 'Jan 2023 – Nov 2024 · 1 yr 11 mos', location: 'Nee Soon Camp' },
+              { title: 'Combat Medic', start: '2023-01', end: '2024-11', location: 'Nee Soon Camp' },
             ],
           },
           {
             org: 'Raven Parthenon Education',
             roles: [
-              { title: 'Olympiad Tutor', dates: 'Oct 2022 – Jan 2023 · 4 mos' },
+              { title: 'Olympiad Tutor', start: '2022-10', end: '2023-01' },
             ],
           },
           {
             org: 'National University of Singapore',
             roles: [
-              { title: 'Nanofabrication Intern', dates: 'May 2022 – Sep 2022 · 5 mos', location: 'E6 Nanofab' },
+              { title: 'Nanofabrication Intern', start: '2022-05', end: '2022-09', location: 'E6 Nanofab' },
             ],
           },
           {
             org: 'Nanyang Technological University Singapore',
-            meta: '2 yrs 11 mos',
             roles: [
-              { title: 'Machine Learning Intern', dates: 'Apr 2021 – Jan 2022 · 10 mos', location: 'Centre for Brain Computing Research' },
-              { title: 'Engineering Intern', dates: 'Mar 2019 – Mar 2020 · 1 yr 1 mo', location: 'Plasma Engineering and Applied Research Laboratory' },
+              { title: 'Machine Learning Intern', start: '2021-04', end: '2022-01', location: 'Centre for Brain Computing Research' },
+              { title: 'Engineering Intern', start: '2019-03', end: '2020-03', location: 'Plasma Engineering and Applied Research Laboratory' },
             ],
           },
           {
             org: 'Minmed Group Pte Ltd',
             roles: [
-              { title: 'Clinical Assistant', dates: 'Nov 2021 – Dec 2021 · 2 mos', location: 'JEM' },
+              { title: 'Clinical Assistant', start: '2021-11', end: '2021-12', location: 'JEM' },
             ],
           },
           {
             org: 'Sport Singapore',
             roles: [
-              { title: 'Lifeguard', dates: 'Jan 2019 – Jan 2020 · 1 yr 1 mo', location: 'Tampines Swimming Complex' },
+              { title: 'Lifeguard', start: '2019-01', end: '2020-01', location: 'Tampines Swimming Complex' },
             ],
           },
         ],
@@ -461,9 +530,9 @@ export const sections: Section[] = [
         entries: [
           { title: 'Founder of KneedIt' },
           { title: 'Project Director of E-Scholars Senior-Teach-Junior Programme' },
-          { title: 'Aquila House Committee & Programmes Committee', meta: 'Residential College 4 (RC4)' },
-          { title: 'Vice Head of RC4 Tea' },
-          { title: 'Treasurer of RC4 Bakes' },
+          { title: 'Programmes Committee, House of Aquila', meta: 'Residential College 4 (RC4) · 2025 – 2026', note: 'Co-led Prank Week' },
+          { title: 'Vice Head of RC4 Tea', meta: '2026 – present' },
+          { title: 'Treasurer of Orcabakes (RC4)', meta: '2026 – present' },
           { title: 'Orientation Group Leader at BME Camp' },
           { title: "Overall I/C, Project i'mPAC", meta: '2021 – 2022', note: 'Led humanitarian relief for Cambodian students and raised $3,400' },
           { title: 'Team Lead at Lions Befrienders', meta: '2021' },

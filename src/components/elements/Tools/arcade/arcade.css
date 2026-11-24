@@ -19,14 +19,16 @@
     --px-green: #4ade80;
     --px-purple: #a78bfa;
     --px-red: #f87171;
-    --px-font: "Pixelify Sans", ui-monospace, monospace;
+    /* DotGothic16: a clear dot font where 5/S, C/O and 1/l/I stay distinct
+       (Pixelify Sans, used before, was hard to read at small sizes). */
+    --px-font: "DotGothic16", ui-monospace, monospace;
 
     position: relative;
     min-height: 100vh;
     background: var(--px-bg);
     color: var(--px-ink);
     font-family: var(--px-font);
-    /* Pixelify Sans draws its "fi" ligature like an "A"; keep letters separate */
+    /* keep letters separate: no ligatures in a pixel font */
     font-variant-ligatures: none;
     font-feature-settings: "liga" 0, "clig" 0;
     /* clip, not hidden: hidden would break position: sticky inside games */

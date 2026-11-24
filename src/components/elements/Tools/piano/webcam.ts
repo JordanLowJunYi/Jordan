@@ -21,6 +21,22 @@ export interface Tip {
 /** Fingertip landmarks in MediaPipe Hands: thumb, index, middle, ring, little. */
 export const FINGERTIPS = [4, 8, 12, 16, 20];
 
+/** One tracked hand: its 21 MediaPipe landmarks in canvas pixels. */
+export interface HandPose {
+  hand: number; // 0 or 1, picks the colour
+  points: ({ x: number; y: number } | undefined)[];
+}
+
+/** The bones between MediaPipe Hands landmarks (0 is the wrist). */
+export const HAND_BONES: [number, number][] = [
+  [0, 1], [1, 2], [2, 3], [3, 4], // thumb
+  [0, 5], [5, 6], [6, 7], [7, 8], // index
+  [9, 10], [10, 11], [11, 12], // middle
+  [13, 14], [14, 15], [15, 16], // ring
+  [0, 17], [17, 18], [18, 19], [19, 20], // little
+  [5, 9], [9, 13], [13, 17], // across the knuckles
+];
+
 /** Keys laid across the lower middle of the frame, in canvas pixels. */
 export function layoutKeys(width: number, height: number, octaves: 1 | 2): CamKey[] {
   const low = 60;
@@ -56,12 +72,12 @@ export function keyAt(keys: CamKey[], x: number, y: number): number | null {
 
 const TIP_COLOURS = ['#f472b6', '#fbbf24'];
 
-/** Pixel-style translucent keys and square fingertip markers. */
+/** Pixel-style translucent keys, then each hand's skeleton with square fingertips. */
 export function drawOverlay(
   ctx: CanvasRenderingContext2D,
   keys: CamKey[],
   lit: ReadonlySet<number>,
-  tips: Tip[],
+  hands: HandPose[],
   showNames: boolean,
 ) {
   const { width, height } = ctx.canvas;
@@ -95,7 +111,7 @@ export function drawOverlay(
   if (showNames && whites.length) {
     // Cream-on-black name tags, like the letter chips on the on-screen keyboard.
     const size = Math.max(8, Math.round(whites[0].w * 0.4));
-    ctx.font = `600 ${size}px "Pixelify Sans", ui-monospace, monospace`;
+    ctx.font = `${size}px "DotGothic16", ui-monospace, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     whites.forEach((k) => {
@@ -111,21 +127,54 @@ export function drawOverlay(
     });
   }
 
-  // Fingertips: chunky pixel squares with a dark outline.
-  const s = Math.max(4, Math.round(width / 90));
-  tips.forEach((t) => {
-    const x = Math.round(t.x - s / 2);
-    const y = Math.round(t.y - s / 2);
+  // Each hand's skeleton: outlined bones, small joints, chunky fingertips.
+  const bone = Math.max(2, Math.round(width / 220));
+  const joint = Math.max(3, Math.round(width / 130));
+  const s = Math.max(4, Math.round(width / 70));
+  const square = (px: number, py: number, size: number, fill: string) => {
+    const x = Math.round(px - size / 2);
+    const y = Math.round(py - size / 2);
     ctx.fillStyle = '#000';
-    ctx.fillRect(x - border, y - border, s + border * 2, s + border * 2);
-    ctx.fillStyle = TIP_COLOURS[t.hand % TIP_COLOURS.length];
-    ctx.fillRect(x, y, s, s);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(x, y, Math.max(1, Math.round(s / 3)), Math.max(1, Math.round(s / 3)));
+    ctx.fillRect(x - border, y - border, size + border * 2, size + border * 2);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, size, size);
+  };
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  hands.forEach((h) => {
+    const colour = TIP_COLOURS[h.hand % TIP_COLOURS.length];
+    const pts = h.points;
+    const bones = () => {
+      ctx.beginPath();
+      HAND_BONES.forEach(([a, b]) => {
+        const p = pts[a];
+        const q = pts[b];
+        if (!p || !q) return;
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+      });
+      ctx.stroke();
+    };
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = bone + border * 2;
+    bones();
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = bone;
+    bones();
+    pts.forEach((p, i) => {
+      if (p && !FINGERTIPS.includes(i)) square(p.x, p.y, joint, '#f5efe2');
+    });
+    FINGERTIPS.forEach((i) => {
+      const p = pts[i];
+      if (!p) return;
+      square(p.x, p.y, s, colour);
+      ctx.fillStyle = '#fff'; // highlight pixel
+      ctx.fillRect(Math.round(p.x - s / 2), Math.round(p.y - s / 2), Math.ceil(s / 3), Math.ceil(s / 3));
+    });
   });
 }
 
-export type CamProblem = 'insecure' | 'denied' | 'nocamera' | 'busy' | 'webgl' | 'model' | 'unknown';
+export type CamProblem = 'insecure' | 'denied' | 'nocamera' | 'busy' | 'webgl' | 'model' | 'tracking' | 'unknown';
 
 export const PROBLEM_TEXT: Record<CamProblem, { lines: string[]; retry: boolean }> = {
   insecure: {
@@ -149,6 +198,13 @@ export const PROBLEM_TEXT: Record<CamProblem, { lines: string[]; retry: boolean 
     retry: false,
   },
   model: { lines: ['The hand-tracking model didn’t download. Check your connection and try again.'], retry: true },
+  tracking: {
+    lines: [
+      'The camera works, but hand tracking keeps failing in this browser.',
+      'Try again, or try Chrome on a laptop. The error is below if you want to send it to Jordan.',
+    ],
+    retry: true,
+  },
   unknown: { lines: ['Something went wrong starting the camera. Try again?'], retry: true },
 };
 

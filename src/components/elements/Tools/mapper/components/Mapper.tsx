@@ -366,7 +366,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
 
       if (scale >= 2) {
         ctx.fillStyle = '#fff';
-        ctx.font = `${Math.min(12, 8 + scale)}px "Pixelify Sans", sans-serif`;
+        ctx.font = `${Math.min(12, 8 + scale)}px "DotGothic16", sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText(node.name.slice(0, 12), px, py + 16 + scale);
       }

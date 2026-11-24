@@ -19,7 +19,7 @@ function Loading() {
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-[#07060f] text-[#f5efe2]"
-      style={{ fontFamily: '"Pixelify Sans", monospace' }}
+      style={{ fontFamily: '"DotGothic16", monospace' }}
     >
       LOADING…
     </div>

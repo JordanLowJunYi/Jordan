@@ -194,7 +194,7 @@ const Visualizer: React.FC<VisualizerProps> = () => {
       // Label
       if (scale >= 2) {
         const text = node.name.slice(0, 15);
-        ctx.font = `500 ${Math.min(13, 10 + scale)}px "Pixelify Sans", system-ui, sans-serif`;
+        ctx.font = `500 ${Math.min(13, 10 + scale)}px "DotGothic16", system-ui, sans-serif`;
         ctx.textAlign = 'center';
         
         const metrics = ctx.measureText(text);
@@ -215,7 +215,7 @@ const Visualizer: React.FC<VisualizerProps> = () => {
 
     // Scale bar
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '11px "Pixelify Sans", system-ui, sans-serif';
+    ctx.font = '11px "DotGothic16", system-ui, sans-serif';
     const scaleMeters = Math.round(80 / scale);
     const scalePx = scaleMeters * scale;
     

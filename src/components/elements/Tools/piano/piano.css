@@ -366,6 +366,9 @@
   text-align: center;
 }
 .pn-legend li { white-space: nowrap; }
+@media (max-width: 480px) {
+  .pn-legend li { white-space: normal; }
+}
 @media (hover: none) and (pointer: coarse) {
   .pn-legend__kbd { display: none; }
 }
@@ -466,6 +469,18 @@
   text-align: center;
   background: rgba(0, 0, 0, 0.85);
   border: 3px solid var(--px-ink);
+}
+.pn-cam__status {
+  position: absolute;
+  left: 0.5rem;
+  top: 0.5rem;
+  margin: 0;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--px-ink);
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid #000;
+  pointer-events: none;
 }
 .pn-cam__hint {
   position: absolute;

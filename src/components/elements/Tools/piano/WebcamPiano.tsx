@@ -18,6 +18,7 @@ import {
   layoutKeys,
   type CamKey,
   type CamProblem,
+  type HandPose,
   type Tip,
 } from './webcam';
 
@@ -39,6 +40,8 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
   const [phase, setPhase] = useState<Phase>('off');
   const [stage, setStage] = useState<Stage>('camera');
   const [problem, setProblem] = useState<CamProblem | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
+  const statusRef = useRef<HTMLParagraphElement>(null);
   const [aspect, setAspect] = useState(4 / 3);
   const [noHands, setNoHands] = useState(false);
   const [octaves, setOctaves] = useState<1 | 2>(() => (window.innerWidth < 640 ? 1 : 2));
@@ -81,6 +84,7 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
   const start = async () => {
     stop();
     setProblem(null);
+    setDetail(null);
     sfx.select();
     if (!navigator.mediaDevices?.getUserMedia) {
       fail('insecure');
@@ -145,11 +149,19 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
       video.width = video.videoWidth;
       video.height = video.videoHeight;
 
-      // Draw keys straight away, fingertips once the model is ready.
+      // Draw keys straight away, the hand skeletons once the model is ready.
       let keys: CamKey[] = [];
       let laidOut = '';
       let lastHandAt = performance.now();
       let handsShown = true;
+      // For the live readout: tracked frames and hands since the last update.
+      let tracked = 0;
+      let lastHands = 0;
+      let readoutAt = performance.now();
+      // A frame or two can fail while WebGL warms up; a long run of failures
+      // means tracking is broken in this browser, so say so instead of
+      // quietly showing no hands.
+      let failures = 0;
 
       const frame = async () => {
         if (!live) return;
@@ -157,9 +169,9 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
         const vw = video.videoWidth;
         const vh = video.videoHeight;
         if (canvas && vw && vh && video.readyState >= 2) {
-          // Half resolution, scaled up with crisp pixels.
-          const cw = Math.round(vw / 2);
-          const ch = Math.round(vh / 2);
+          // Same size as the camera image, so the skeleton lines are sharp.
+          const cw = vw;
+          const ch = vh;
           if (canvas.width !== cw || canvas.height !== ch) {
             canvas.width = cw;
             canvas.height = ch;
@@ -178,24 +190,36 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
           }
 
           const found: Tip[] = [];
+          const poses: HandPose[] = [];
           const detector = detectorRef.current;
           if (detector) {
             try {
+              // As in the 2025 version: mirror the image so it matches the
+              // mirrored video, and check every fingertip of every hand.
               const hands = await detector.estimateHands(video, { flipHorizontal: true, staticImageMode: false });
               if (!live) return;
-              const used = new Set<string>();
+              failures = 0;
+              tracked += 1;
+              lastHands = hands.length;
+              // the canvas is camera-sized, so landmarks need no scaling
               hands.forEach((h, i) => {
-                let handId: string = h.handedness ?? `h${i}`;
-                if (used.has(handId)) handId += i;
-                used.add(handId);
+                const points = h.keypoints.map((p) => (p ? { x: p.x, y: p.y } : undefined));
+                poses.push({ hand: i, points });
                 FINGERTIPS.forEach((tip) => {
-                  const p = h.keypoints[tip];
-                  if (p) found.push({ id: `${handId}:${tip}`, x: p.x * (cw / vw), y: p.y * (ch / vh), hand: i });
+                  const p = points[tip];
+                  if (p) found.push({ id: `${i}:${tip}`, x: p.x, y: p.y, hand: i });
                 });
               });
             } catch (err) {
-              // skip a bad frame, but say why in the console instead of failing silently
               console.warn('[piano] hand tracking frame failed', err);
+              failures += 1;
+              if (failures >= 30) {
+                session.stop();
+                sessionRef.current = null;
+                setDetail(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+                fail('tracking');
+                return;
+              }
             }
           }
 
@@ -206,9 +230,18 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
             handsShown = !showHint;
             setNoHands(showHint);
           }
+          // Live readout, twice a second, written straight to the DOM so it
+          // doesn't re-render the page on every frame.
+          if (detector && now - readoutAt >= 500) {
+            const fps = Math.round((tracked * 1000) / (now - readoutAt));
+            const label = lastHands === 0 ? 'No hand' : lastHands === 1 ? '1 hand' : `${lastHands} hands`;
+            if (statusRef.current) statusRef.current.textContent = `${label} · ${fps} fps`;
+            tracked = 0;
+            readoutAt = now;
+          }
           trackTips(found, keys);
           const ctx = canvas.getContext('2d');
-          if (ctx) drawOverlay(ctx, keys, litRef.current, found, namesRef.current);
+          if (ctx) drawOverlay(ctx, keys, litRef.current, poses, namesRef.current);
         }
         raf = requestAnimationFrame(() => void frame());
       };
@@ -249,9 +282,12 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
         if (!live) return;
 
         goStage('model');
+        // The 2025 version used the "lite" model. Laptops get the "full" one,
+        // which finds hands more reliably; phones keep "lite" for speed.
+        const phone = window.matchMedia?.('(pointer: coarse)').matches ?? false;
         const detector = await handPose.createDetector(handPose.SupportedModels.MediaPipeHands, {
           runtime: 'tfjs',
-          modelType: 'lite',
+          modelType: phone ? 'lite' : 'full',
           maxHands: 2,
         });
         if (!live) {
@@ -275,6 +311,10 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
     startRef.current = start;
   });
   const problemText = problem ? PROBLEM_TEXT[problem] : null;
+  const problemLines = useMemo(
+    () => (problemText ? [...problemText.lines, ...(detail ? [`Error: ${detail}`] : [])] : []),
+    [problemText, detail],
+  );
   const choices = useMemo(
     () =>
       problemText
@@ -291,7 +331,7 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
   return (
     <div className="grid gap-4">
       {phase === 'error' && problemText && (
-        <DialogueBox speaker="Camera" lines={problemText.lines} choices={choices} />
+        <DialogueBox speaker="Camera" lines={problemLines} choices={choices} />
       )}
 
       <div className="px-box pn-panel">
@@ -358,6 +398,12 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
             </div>
           )}
 
+          {phase === 'running' && (
+            <p ref={statusRef} className="pn-cam__status" aria-hidden="true">
+              Tracking…
+            </p>
+          )}
+
           {phase === 'running' && noHands && (
             <p className="pn-cam__hint" role="status">
               Raise a hand into view ✋
@@ -367,8 +413,9 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
       </div>
 
       <p className="pn-help">
-        Hold your hand above the keys, then dip a fingertip into one to play it. Each fingertip plays one key at a time;
-        move it out and back in to play again. Works best in good light with your hand a little way from the camera.
+        Hold your hand above the keys, then dip a fingertip into one to play it. The lines drawn on your hand are what
+        the tracker sees. If none appear, show your whole hand, palm or back towards the camera, about an arm's length
+        away and in good light.
       </p>
     </div>
   );

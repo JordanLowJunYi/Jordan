@@ -346,7 +346,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
         // Label background
         const text = node.name.slice(0, 15);
-        ctx.font = '500 12px "Pixelify Sans", system-ui, sans-serif';
+        ctx.font = '500 12px "DotGothic16", system-ui, sans-serif';
         const metrics = ctx.measureText(text);
         const labelY = py + 24;
         
@@ -363,7 +363,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
         // Step number for intermediate nodes
         if (!isStart && !isEnd) {
           ctx.fillStyle = '#fff';
-          ctx.font = 'bold 10px "Pixelify Sans", system-ui, sans-serif';
+          ctx.font = 'bold 10px "DotGothic16", system-ui, sans-serif';
           ctx.fillText(idx.toString(), px, py + 4);
         }
       });

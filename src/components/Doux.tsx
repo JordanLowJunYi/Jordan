@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Hero from './elements/Hero';
 import MenuButton from './elements/Menu/MenuButton';
@@ -6,6 +6,9 @@ import ProjectSection from './elements/Sections/ProjectSection';
 import Highlights from './elements/Sections/Highlights/Highlights';
 import Testimonials from './elements/Sections/Testimonials';
 import { sections } from '../content/siteContent';
+
+// The music switch and its song load after the page, in their own chunk.
+const HomeMusic = lazy(() => import('./elements/HomeMusic/HomeMusic'));
 
 const Doux: React.FC = () => {
   const { hash } = useLocation();
@@ -42,6 +45,11 @@ const Doux: React.FC = () => {
       </main>
 
       <MenuButton />
+
+      {/* fallback={null}: never swap the page for the loading screen */}
+      <Suspense fallback={null}>
+        <HomeMusic />
+      </Suspense>
     </>
   );
 };

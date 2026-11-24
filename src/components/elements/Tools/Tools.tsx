@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Volume2, VolumeX } from 'lucide-react';
 import { GlitchText, PixelArt, sfx, useMuted } from './arcade';
+import { useSong } from './arcade/music';
 import { IDLE, PAL as LATTE_PAL, latteGrid } from './latte/sprite';
+import { STARLIGHT_SELECT } from './menuTheme';
 import './arcade/arcade.css';
 
 // ---------------------------------------------------------------------------
@@ -201,6 +203,8 @@ const Tools: React.FC = () => {
   const navigate = useNavigate();
   const [muted, setMuted] = useMuted();
   const [replay, setReplay] = useState(0);
+  // Menu music: starts on the visitor's first click or key (see useSong).
+  const music = useSong(STARLIGHT_SELECT);
 
   useEffect(() => {
     const prev = document.title;
@@ -223,19 +227,30 @@ const Tools: React.FC = () => {
         >
           ◀ Home
         </button>
-        <button
-          type="button"
-          className="px-btn px-btn--icon"
-          aria-pressed={muted}
-          aria-label={muted ? 'Unmute sound' : 'Mute sound'}
-          title={muted ? 'Sound off' : 'Sound on'}
-          onClick={() => {
-            setMuted(!muted);
-            if (muted) setTimeout(() => sfx.select(), 0);
-          }}
-        >
-          {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
-        </button>
+        <div className="flex items-center gap-3">
+          <span className="px-label hidden text-[var(--px-dim)] sm:inline" aria-live="polite">
+            {muted ? '♪ Music off' : music.playing ? `♪ Now playing: ${STARLIGHT_SELECT.title}` : '♪ Click anywhere for music'}
+          </span>
+          <button
+            type="button"
+            data-sound-toggle
+            className="px-btn px-btn--icon"
+            aria-pressed={muted}
+            aria-label={muted ? 'Unmute sound' : music.playing ? 'Mute sound' : 'Play music'}
+            title={muted ? 'Sound off' : music.playing ? 'Sound on' : 'Play music'}
+            onClick={() => {
+              // Before the music has started, the first press starts it.
+              if (!music.playing && !muted) return music.start();
+              setMuted(!muted);
+              if (muted) {
+                music.start();
+                setTimeout(() => sfx.select(), 0);
+              }
+            }}
+          >
+            {muted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
+          </button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
@@ -261,7 +276,7 @@ const Tools: React.FC = () => {
         </section>
 
         <p className="mt-12 text-center text-sm text-[var(--px-faint)]">
-          Sound effects are made live in your browser. Mute any time with the speaker button.
+          Music and sound effects are made live in your browser. Mute any time with the speaker button.
         </p>
       </main>
     </div>

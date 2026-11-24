@@ -7,6 +7,7 @@ import { prefersReducedMotion } from '../../../lib/motion';
 import Semiconductor from '../../standards/backgrounds/Semiconductor';
 import Standard from '../../standards/backgrounds/Standard';
 import { ManhattanHero } from './BME/ManhattanHero';
+import { CarouselToggle } from './CarouselToggle';
 import type { BackgroundKey, ProjectCard, Section } from '../../../content/siteContent';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
@@ -303,6 +304,8 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
   // Auto-rotate, but never for reduced-motion users, and only when there is more
   // than one card to rotate through.
   const autoplayEnabled = !prefersReducedMotion() && cardCount > 1;
+  // Whether the visitor wants rotation on (the pause button flips it).
+  const [playing, setPlaying] = useState(autoplayEnabled);
 
   const openCard = (card: ProjectCard, e: React.MouseEvent<HTMLButtonElement>) => {
     // Keyboard activation (Enter/Space) reports detail 0 and never involves a
@@ -316,7 +319,13 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
 
   const closeCard = () => {
     setActiveCard(null);
-    if (autoplayEnabled) sliderRef.current?.slickPlay();
+    if (playing) sliderRef.current?.slickPlay();
+  };
+
+  const togglePlaying = () => {
+    if (playing) sliderRef.current?.slickPause();
+    else sliderRef.current?.slickPlay();
+    setPlaying(!playing);
   };
 
   const settings = {
@@ -327,7 +336,9 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
     slidesToScroll: 1,
     autoplay: autoplayEnabled,
     autoplaySpeed: 4000,
-    pauseOnHover: true,
+    // Keep rotating under the pointer (the desktop pointer usually rests over the
+    // carousel, which made it look static); the pause button stops it instead.
+    pauseOnHover: false,
     pauseOnFocus: true,
     arrows: cardCount > 1,
     prevArrow: <CarouselArrow direction="prev" />,
@@ -364,7 +375,7 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
 
         <div
           data-reveal
-          className="project-carousel w-full max-w-6xl mx-auto px-8 sm:px-12 pb-16"
+          className="project-carousel relative w-full max-w-6xl mx-auto px-8 sm:px-12 pb-16"
           onPointerDownCapture={(e) => {
             pointerDown.current = { x: e.clientX, y: e.clientY };
             didDrag.current = false;
@@ -390,6 +401,14 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
               <ProjectCardTile key={card.id} card={card} onOpen={(e) => openCard(card, e)} />
             ))}
           </Slider>
+          {autoplayEnabled && (
+            <CarouselToggle
+              playing={playing}
+              onToggle={togglePlaying}
+              label="projects"
+              className="absolute bottom-3.5 right-8 sm:right-12 border-pink-400/40 bg-pink-500/10 text-pink-100 hover:border-pink-300/80 hover:bg-pink-500/25 focus-visible:ring-pink-400/70"
+            />
+          )}
         </div>
       </div>
 

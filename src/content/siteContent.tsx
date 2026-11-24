@@ -97,6 +97,17 @@ export interface NavStyle {
   glow: string;
 }
 
+// One excerpt for the testimonials carousel. `quote` must be copied word for word
+// from the letter at `letter.href`; the slide links to that letter so readers can
+// check the context.
+export interface TestimonialQuote {
+  quote: string;
+  name: string;
+  role: string;                     // job title, as written in the letter or on LinkedIn
+  org: string;
+  letter: { label: string; href: string };
+}
+
 export type Section =
   | {
       kind: 'projects';
@@ -114,6 +125,14 @@ export type Section =
       title: string;
       background: BackgroundKey;
       groups: HighlightGroup[];
+    }
+  | {
+      kind: 'testimonials';
+      id: string;
+      nav: NavStyle;
+      title: string;
+      subtitle?: string;
+      quotes: TestimonialQuote[];
     };
 
 // ---------------------------------------------------------------------------
@@ -148,6 +167,25 @@ export const hero: HeroContent = {
       external: true,
     },
   ],
+};
+
+// ---------------------------------------------------------------------------
+// TESTIMONIAL LETTERS  (PDFs in public/testimonials; used by Experience and
+// by the testimonials carousel, so each is defined once)
+// ---------------------------------------------------------------------------
+const LETTERS = {
+  astar: {
+    label: 'Testimonial by David Sher, Deputy Director, Venture Creation & Market Access',
+    href: `${BASE}testimonials/ASTAR_Testimonial_Jordan_Low.pdf`,
+  },
+  kosmode: {
+    label: 'Testimonial by Florence Leong, Founder & Director',
+    href: `${BASE}testimonials/Kosmode_Testimonial_Jordan_Low.pdf`,
+  },
+  mds: {
+    label: 'Testimonial by Lim Eng Seng, Founder & Principal Engineer',
+    href: `${BASE}testimonials/MDesign_Testimonial_Jordan_Low.pdf`,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -217,6 +255,9 @@ export const sections: Section[] = [
           'Validated in stages: sponge, then ballistic-gel phantom with FITC-dextran, then user testing (SUS/QUEST)',
           'IDEATE 2025 Champion (S$10,000 NUS VIP Grant) and EDIC INSPIRE 2026 Most Impactful Project',
         ],
+        // Prototype 2 on the bench: sleeve, bellows actuator and suction cup on a
+        // forearm model, driven from the phone pump-controller app.
+        image: `${BASE}images/Showcase/freestryde_prototype.jpg`,
         gradient: 'from-sky-500 to-indigo-600',
         link: {
           label: 'Our lymphedema network meta-analysis (Supportive Care in Cancer, 2026)',
@@ -304,6 +345,8 @@ export const sections: Section[] = [
           'Stayed self-contained at inference across heterogeneous vendors and missing sequences',
           'First-author paper in press, MICCAI 2026 Satellite Events (Lecture Notes in Computer Science)',
         ],
+        // Graphic built from the paper's own LiSeg overlays (case 0888-A-S1).
+        image: `${BASE}images/Showcase/care_liver.jpg`,
         gradient: 'from-orange-500 to-rose-600',
         link: { label: 'Digital Heart Lab', href: 'https://digitalheartlab.com/people/jordan_low' },
       },
@@ -448,10 +491,7 @@ export const sections: Section[] = [
                 title: 'Innovation and Enterprise Intern',
                 start: '2026-05', end: '2026-08',
                 location: 'Kinesis, Innovis',
-                testimonial: {
-                  label: 'Testimonial by David Sher, Deputy Director, Venture Creation & Market Access',
-                  href: `${BASE}testimonials/ASTAR_Testimonial_Jordan_Low.pdf`,
-                },
+                testimonial: LETTERS.astar,
               },
               { title: 'Institute of Molecular and Cell Biology Intern', start: '2026-05', end: '2026-08', location: 'Proteos' },
             ],
@@ -464,10 +504,7 @@ export const sections: Section[] = [
               {
                 title: 'Business Development Intern',
                 start: '2025-02', end: '2025-03',
-                testimonial: {
-                  label: 'Testimonial by Florence Leong, Founder & Director',
-                  href: `${BASE}testimonials/Kosmode_Testimonial_Jordan_Low.pdf`,
-                },
+                testimonial: LETTERS.kosmode,
               },
             ],
           },
@@ -478,10 +515,7 @@ export const sections: Section[] = [
                 title: 'Mechanical Designer Intern',
                 start: '2024-12', end: '2025-02',
                 location: '79 Ayer Rajah Crescent',
-                testimonial: {
-                  label: 'Testimonial by Lim Eng Seng, Founder & Principal Engineer',
-                  href: `${BASE}testimonials/MDesign_Testimonial_Jordan_Low.pdf`,
-                },
+                testimonial: LETTERS.mds,
               },
             ],
           },
@@ -542,6 +576,66 @@ export const sections: Section[] = [
           { title: 'Volunteer at Fei Yue', meta: '2024 – 2025' },
           { title: 'Student Volunteer at SHINE Children & Youth Services', meta: '2021' },
         ],
+      },
+    ],
+  },
+
+  // =========================== TESTIMONIALS ===========================
+  // Excerpts are verbatim from the letters in public/testimonials.
+  {
+    kind: 'testimonials',
+    id: 'testimonials-section',
+    title: 'What employers say',
+    subtitle: 'Excerpts from testimonial letters. Open one to read it in full.',
+    nav: { label: 'TESTIMONIALS', color: '#10b981', glow: '#34d399' },
+    quotes: [
+      {
+        quote:
+          'Taking on dual roles is demanding for anyone, and Jordan handled both well beyond what I expect from an intern.',
+        name: 'David Sher',
+        role: 'Deputy Director, Venture Creation & Market Access',
+        org: 'A*STAR',
+        letter: LETTERS.astar,
+      },
+      {
+        quote:
+          'He demonstrated an exceptional ability to tackle complex engineering challenges with creativity, precision, and dedication.',
+        name: 'Lim Eng Seng',
+        role: 'Founder & Principal Engineer',
+        org: 'MDS-Plus',
+        letter: LETTERS.mds,
+      },
+      {
+        quote:
+          'Throughout the internship, Jordan demonstrated a ‘Can-do’ mentality, the courage to undertake challenges and resolve problems, a sense of purpose. In short - a maturity beyond his age.',
+        name: 'Florence Leong',
+        role: 'Founder & Director',
+        org: 'KosmodeHealth',
+        letter: LETTERS.kosmode,
+      },
+      {
+        quote:
+          'A self-motivated and efficient individual, Jordan managed his responsibilities with minimal supervision.',
+        name: 'Lim Eng Seng',
+        role: 'Founder & Principal Engineer',
+        org: 'MDS-Plus',
+        letter: LETTERS.mds,
+      },
+      {
+        quote:
+          "Working with no financial budget and tight time constraints during academic term, Jordan successfully revamped KosmodeHealth's corporate website.",
+        name: 'Florence Leong',
+        role: 'Founder & Director',
+        org: 'KosmodeHealth',
+        letter: LETTERS.kosmode,
+      },
+      {
+        quote:
+          'Any team would be fortunate to have him, and I expect him to make a real contribution wherever he lands next.',
+        name: 'David Sher',
+        role: 'Deputy Director, Venture Creation & Market Access',
+        org: 'A*STAR',
+        letter: LETTERS.astar,
       },
     ],
   },

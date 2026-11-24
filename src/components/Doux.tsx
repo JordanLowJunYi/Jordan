@@ -3,6 +3,7 @@ import Hero from './elements/Hero';
 import MenuButton from './elements/Menu/MenuButton';
 import ProjectSection from './elements/Sections/ProjectSection';
 import Highlights from './elements/Sections/Highlights/Highlights';
+import Testimonials from './elements/Sections/Testimonials';
 import { sections } from '../content/siteContent';
 
 const Doux: React.FC = () => {
@@ -17,6 +18,8 @@ const Doux: React.FC = () => {
           <div id={section.id} key={section.id}>
             {section.kind === 'projects' ? (
               <ProjectSection section={section} />
+            ) : section.kind === 'testimonials' ? (
+              <Testimonials section={section} />
             ) : (
               <Highlights section={section} />
             )}

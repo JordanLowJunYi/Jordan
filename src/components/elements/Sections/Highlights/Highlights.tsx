@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { ExternalLink } from 'lucide-react';
 import Standard from '../../../standards/backgrounds/Standard';
+import Aurora from '../../../standards/backgrounds/Aurora';
 import Experience from './Experience';
 import { useReveal } from '../../../../lib/useReveal';
 import type { Section } from '../../../../content/siteContent';
@@ -32,6 +33,7 @@ const Highlights: React.FC<{ section: HighlightsSection }> = ({ section }) => {
       {/* Background: optional animated canvas, plus a lightweight CSS grid overlay */}
       <div className="absolute inset-0 z-0">
         {section.background === 'standard' && <Standard />}
+        {section.background === 'aurora' && <Aurora />}
         <div
           className="absolute inset-0 opacity-[0.07]"
           style={{

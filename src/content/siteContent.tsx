@@ -24,7 +24,7 @@ const SELF_URL = typeof window === 'undefined' ? '' : `${window.location.origin}
 const SELF_DISPLAY =
   typeof window === 'undefined' ? '' : `${window.location.host}${BASE}`.replace(/\/$/, '');
 
-export type BackgroundKey = 'standard' | 'dna' | 'semiconductor' | 'none';
+export type BackgroundKey = 'standard' | 'dna' | 'semiconductor' | 'aurora' | 'none';
 
 export interface ContactLink {
   label: string;      // left-hand tag, e.g. "Email"
@@ -358,7 +358,7 @@ export const sections: Section[] = [
     kind: 'highlights',
     id: 'about-section',
     title: 'More about me',
-    background: 'none',
+    background: 'aurora',
     nav: { label: 'MORE ABOUT ME', color: '#f59e0b', glow: '#fbbf24' },
     groups: [
       {
@@ -585,8 +585,8 @@ export const sections: Section[] = [
   {
     kind: 'testimonials',
     id: 'testimonials-section',
-    title: 'What employers say',
-    subtitle: 'Excerpts from testimonial letters. Open one to read it in full.',
+    title: 'Testimonials',
+    subtitle: "Excerpts from letters by people I've worked with. Open one to read it in full.",
     nav: { label: 'TESTIMONIALS', color: '#10b981', glow: '#34d399' },
     quotes: [
       {

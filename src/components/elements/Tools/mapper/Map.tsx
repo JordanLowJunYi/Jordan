@@ -1,24 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import Mapper from './components/Mapper';
 import Visualizer from './components/Visualizer';
 import Pathfinding from './components/Pathfinding';
 import Storage from './components/Storage';
 import { storageUtils } from './utils/storage';
 import type { MapData, Tab } from './utils/types';
+import { sfx } from '../arcade';
+import '../arcade/arcade.css';
 import './mapper.css';
 
 function Map() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>('mapper');
   const [loadedMap, setLoadedMap] = useState<MapData | null>(null);
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
-  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
+  // Same browser-tab title format GameShell gives every other game.
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoaded(true), 50);
-    return () => clearTimeout(timer);
+    const prev = document.title;
+    document.title = "Mapper · Jordan's Arcade";
+    return () => {
+      document.title = prev;
+    };
   }, []);
 
   const tabs: Tab[] = [
@@ -34,149 +37,69 @@ function Map() {
   };
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-[#0a0a0b] text-white">
-      {/* Sidebar Navigation */}
-      <aside
-        className={`
-          relative z-30 flex h-full w-16 lg:w-64 flex-col
-          border-r border-white/[0.06] bg-[#0a0a0b]
-          transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]
-          ${isLoaded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}
-        `}
-      >
-        {/* Subtle sidebar gradient */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent" />
-
-        {/* Back to Games */}
-        <div className="relative px-3 py-3">
+    // `arcade` brings the shared pixel font, colours and starfield; mapper.css
+    // undoes the frame's 100vh min-height so the tool fits phone screens.
+    <div className="arcade px-accent-green mapper-root flex h-dvh w-full overflow-hidden">
+      {/* Sidebar: an icon rail on small screens, labelled on large ones */}
+      <aside className="mp-sidebar relative z-30 flex h-full w-16 shrink-0 flex-col lg:w-60">
+        <div className="px-2 pb-3 pt-4 lg:px-4">
           <button
             type="button"
-            onClick={() => navigate('/Tools')}
+            onClick={() => {
+              sfx.back();
+              navigate('/Tools');
+            }}
             aria-label="Back to Games"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+            title="Back to Games"
+            className="px-btn px-btn--small mp-back w-full"
           >
-            <ArrowLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="hidden text-[13px] font-medium lg:inline">Back to Games</span>
+            <span aria-hidden="true">◀</span>
+            <span className="hidden lg:inline">Games</span>
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-2">
-          <div className="space-y-1">
-            {tabs.map((tab, index) => {
+        <p className="px-title hidden px-4 pb-3 pt-1 text-3xl lg:block">Mapper</p>
+
+        <nav className="flex-1 px-2 py-2 lg:px-3" aria-label="Mapper sections">
+          <ul className="space-y-2">
+            {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
-              const isHovered = hoveredTab === tab.id;
-              
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  onMouseEnter={() => setHoveredTab(tab.id)}
-                  onMouseLeave={() => setHoveredTab(null)}
-                  className={`
-                    group relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5
-                    transition-all duration-200 ease-out
-                    ${isActive 
-                      ? 'text-white' 
-                      : 'text-white/40 hover:text-white/70'
-                    }
-                  `}
-                  style={{
-                    transitionDelay: `${index * 50}ms`,
-                  }}
-                >
-                  {/* Active indicator */}
-                  <div
-                    className={`
-                      absolute inset-0 rounded-lg transition-all duration-300
-                      ${isActive 
-                        ? 'bg-white/[0.08] opacity-100' 
-                        : 'bg-white/[0.04] opacity-0 group-hover:opacity-100'
-                      }
-                    `}
-                  />
-                  
-                  {/* Left accent bar */}
-                  <div
-                    className={`
-                      absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full
-                      transition-all duration-300
-                      ${isActive 
-                        ? 'bg-emerald-400 opacity-100' 
-                        : 'bg-white/20 opacity-0'
-                      }
-                    `}
-                  />
-
-                  {/* Icon */}
-                  <span
-                    className={`
-                      relative flex h-7 w-7 items-center justify-center rounded-md
-                      text-xs transition-all duration-200
-                      ${isActive 
-                        ? 'text-emerald-400' 
-                        : 'text-white/30 group-hover:text-white/50'
-                      }
-                    `}
+                <li key={tab.id}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className="mp-tab"
+                    aria-current={isActive ? 'page' : undefined}
+                    aria-label={tab.label}
+                    title={tab.label}
                   >
-                    {tab.icon}
-                  </span>
-
-                  {/* Label */}
-                  <span className="relative hidden text-[13px] font-medium lg:inline">
-                    {tab.label}
-                  </span>
-
-                  {/* Hover glow */}
-                  {(isHovered || isActive) && (
-                    <div
-                      className={`
-                        pointer-events-none absolute -right-3 top-1/2 h-12 w-12 -translate-y-1/2
-                        rounded-full blur-xl transition-opacity duration-500
-                        ${isActive ? 'bg-emerald-500/10' : 'bg-white/5'}
-                      `}
-                    />
-                  )}
-                </button>
+                    <span className="mp-tab__icon" aria-hidden="true">
+                      {tab.icon}
+                    </span>
+                    <span className="hidden lg:inline">{tab.label}</span>
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </nav>
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Content */}
-        <main
-          className={`
-            relative flex-1 overflow-y-auto overflow-x-hidden
-            transition-all duration-700 delay-200 ease-out
-            ${isLoaded ? 'opacity-100' : 'opacity-0 translate-y-2'}
-          `}
-        >
-          {/* Ambient background effects */}
-          <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="absolute -left-40 -top-40 h-80 w-80 rounded-full bg-emerald-500/[0.03] blur-3xl" />
-            <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-cyan-500/[0.02] blur-3xl" />
-          </div>
-
-          {/* Grid pattern */}
-          <div
-            className="pointer-events-none absolute inset-0 opacity-[0.02]"
-            style={{
-              backgroundImage: `
-                linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)
-              `,
-              backgroundSize: '64px 64px',
-            }}
-          />
-
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="relative flex-1 overflow-y-auto overflow-x-hidden">
           {/* Tab content */}
           <div className="relative z-10 h-full">
-            {activeTab === 'mapper' && (
-              <Mapper loadedMap={loadedMap} onSave={(mapName: string, mapData: MapData) => storageUtils.saveMap(mapName, mapData)} />
-            )}
+            {/* The Mapper stays mounted while hidden: switching tabs used to
+                unmount it, wiping unsaved nodes and stopping GPS mid-walk. */}
+            <div className={activeTab === 'mapper' ? 'h-full' : 'hidden'}>
+              <Mapper
+                active={activeTab === 'mapper'}
+                loadedMap={loadedMap}
+                onSave={(mapName: string, mapData: MapData) => storageUtils.saveMap(mapName, mapData)}
+              />
+            </div>
             {activeTab === 'storage' && <Storage onLoadMap={handleLoadMap} />}
             {activeTab === 'visualizer' && (
               <Visualizer />

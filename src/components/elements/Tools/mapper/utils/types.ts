@@ -154,8 +154,11 @@ export interface DijkstraResult {
 
 // Component props types
 export interface MapperProps {
-  onSave: (mapName: string, mapData: MapData) => void;
+  /** returns false when the save failed (e.g. browser storage full) */
+  onSave: (mapName: string, mapData: MapData) => boolean | void;
   loadedMap: MapData | null;
+  /** false while another tab is showing: the Mapper stays mounted so a session isn't lost */
+  active?: boolean;
 }
 
 export interface StorageProps {

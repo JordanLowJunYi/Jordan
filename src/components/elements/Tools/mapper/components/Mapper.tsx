@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, type ChangeEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import React, { useState, useEffect, useRef, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { MapPin, Navigation, Save, Play, Square as StopIcon, ZoomIn, ZoomOut, Home, Target } from 'lucide-react';
 import { useGPS } from '../utils/useGPS';
+import { useResizeTick } from '../utils/useResizeTick';
 import { dist2d, dist3d, generateId } from '../utils/helpers';
 import type { MapperProps, MapNode, MapEdge, PathPoint, ViewState, NodeForm, ToastState, NodeType, Graph, Coordinates } from '../utils/types';
 
@@ -10,8 +11,9 @@ const FLOOR_HEIGHT = 4;
 const Z_THRESHOLD = 2;
 const FLOORS: number[] = [-1, 1, 2, 3, 4, 5, 6];
 
-const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
+const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const resizeTick = useResizeTick();
   const [currentFloor, setCurrentFloor] = useState<number>(1);
   const [nodes, setNodes] = useState<MapNode[]>([]);
   const [edges, setEdges] = useState<MapEdge[]>([]);
@@ -50,6 +52,16 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
     setToast({ show: true, message });
     setTimeout(() => setToast({ show: false, message: '' }), 2500);
   };
+
+  // Escape closes the Add Node dialog.
+  useEffect(() => {
+    if (!showModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowModal(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showModal]);
 
   // Load map from props
   useEffect(() => {
@@ -252,12 +264,14 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
 
   // Rendering
   useEffect(() => {
+    // Hidden behind another tab: nothing to size or draw. Redraws on return.
+    if (!active) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
+
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
@@ -268,13 +282,13 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
     const cy = H / 2 + view.panY;
     const scale = view.scale;
 
-    // Background
-    ctx.fillStyle = '#161b22';
+    // Background (arcade night sky)
+    ctx.fillStyle = '#0b0a18';
     ctx.fillRect(0, 0, W, H);
 
     // Grid
     const gridSize = Math.max(25, 50 / scale * 4);
-    ctx.strokeStyle = '#30363d';
+    ctx.strokeStyle = 'rgba(167, 139, 250, 0.14)';
     ctx.lineWidth = 1;
 
     for (let x = (cx % gridSize); x < W; x += gridSize) {
@@ -291,7 +305,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
     }
 
     // Origin
-    ctx.strokeStyle = '#484f58';
+    ctx.strokeStyle = '#6b6490';
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(cx - 20, cy);
@@ -352,7 +366,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
 
       if (scale >= 2) {
         ctx.fillStyle = '#fff';
-        ctx.font = `${Math.min(12, 8 + scale)}px sans-serif`;
+        ctx.font = `${Math.min(12, 8 + scale)}px "Pixelify Sans", sans-serif`;
         ctx.textAlign = 'center';
         ctx.fillText(node.name.slice(0, 12), px, py + 16 + scale);
       }
@@ -376,7 +390,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
     ctx.beginPath();
     ctx.arc(px, py, NODE_PROXIMITY * scale, 0, Math.PI * 2);
     ctx.stroke();
-  }, [view, gps.position, nodes, edges, currentFloor, recording, recPoints, recConnectedNodes]);
+  }, [active, resizeTick, view, gps.position, nodes, edges, currentFloor, recording, recPoints, recConnectedNodes]);
 
   const zoomIn = (): void => setView(v => ({ ...v, scale: Math.min(20, v.scale * 1.5) }));
   const zoomOut = (): void => setView(v => ({ ...v, scale: Math.max(1, v.scale / 1.5) }));
@@ -408,8 +422,8 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
       graph: buildGraph()
     };
 
-    onSave(mapName, mapData);
-    showToast(`✓ Map "${mapName}" saved!`);
+    const ok = onSave(mapName, mapData);
+    showToast(ok === false ? 'Could not save: browser storage is full or blocked' : `✓ Map "${mapName}" saved!`);
   };
 
   const buildGraph = (): Graph => {
@@ -426,11 +440,14 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
 
   const verticalEdges = edges.filter(e => e.isVertical);
 
-  const handleMouseDown = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
+  // Pointer events (not mouse-only) so dragging pans on touch screens too; the
+  // canvas has touch-action: none so the drag doesn't scroll the page instead.
+  const handleMouseDown = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     setView(v => ({ ...v, isPanning: true, lastX: e.clientX, lastY: e.clientY }));
   };
 
-  const handleMouseMove = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
+  const handleMouseMove = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
     if (!view.isPanning) return;
     setView(v => ({
       ...v,
@@ -450,67 +467,66 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-dark-900">
+    <div className="h-full flex flex-col">
       {/* Recording Banner */}
       {recording && (
-        <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white py-3 px-4 text-center font-semibold text-sm">
-          ⏺ Recording path... Walk near nodes to connect!
+        <div className="mp-banner" role="status">
+          ⏺ Recording path. Walk near nodes to connect them!
         </div>
       )}
 
       {/* Map */}
-      <div className="flex-1 relative">
-        <canvas 
+      <div className="relative min-h-[11rem] flex-1">
+        <canvas
           ref={canvasRef}
-          className="w-full h-full cursor-grab active:cursor-grabbing"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          role="img"
+          aria-label="Map of nodes and paths on this floor. Drag to pan."
+          className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          onPointerDown={handleMouseDown}
+          onPointerMove={handleMouseMove}
+          onPointerUp={handleMouseUp}
+          onPointerCancel={handleMouseLeave}
         />
 
         {/* Map Controls */}
-        <div className="absolute top-4 right-4 flex flex-col gap-2">
-          <button onClick={zoomIn} className="bg-white/90 backdrop-blur w-10 h-10 rounded-lg flex items-center justify-center hover:bg-white transition shadow-lg">
-            <ZoomIn size={20} color="black" />
-          </button>
-          <button onClick={zoomOut} className="bg-white/90 backdrop-blur w-10 h-10 rounded-lg flex items-center justify-center hover:bg-white transition shadow-lg">
-            <ZoomOut size={20} color="black" />
-          </button>
-          <button onClick={resetView} className="bg-white/90 backdrop-blur w-10 h-10 rounded-lg flex items-center justify-center hover:bg-white transition shadow-lg">
-            <Home size={20} color="black" />
-          </button>
-          <button onClick={centerOnMe} className="bg-white/90 backdrop-blur w-10 h-10 rounded-lg flex items-center justify-center hover:bg-white transition shadow-lg">
-            <Target size={20} color="black" />
-          </button>
+        <div className="absolute right-3 top-3 flex flex-col gap-3">
+          {[
+            { icon: ZoomIn, action: zoomIn, label: 'Zoom in' },
+            { icon: ZoomOut, action: zoomOut, label: 'Zoom out' },
+            { icon: Home, action: resetView, label: 'Reset view' },
+            { icon: Target, action: centerOnMe, label: 'Centre on my position' },
+          ].map(({ icon: Icon, action, label }) => (
+            <button key={label} type="button" onClick={action} className="px-btn px-btn--icon" aria-label={label} title={label}>
+              <Icon size={18} aria-hidden="true" />
+            </button>
+          ))}
         </div>
 
         {/* GPS Info */}
-        <div className="absolute top-4 left-4 glass rounded-lg p-3 text-xs font-mono space-y-1">
-          <div><span className="text-gray-400">X:</span> <span className="text-blue-400">{gps.position.x.toFixed(1)}m</span></div>
-          <div><span className="text-gray-400">Y:</span> <span className="text-blue-400">{gps.position.y.toFixed(1)}m</span></div>
-          <div><span className="text-gray-400">Z:</span> <span className="text-orange-400">{gps.position.z.toFixed(1)}m</span></div>
-          <div><span className="text-gray-400">Floor:</span> <span className="text-blue-400">{currentFloor}</span></div>
+        <div className="mp-panel absolute left-3 top-3 space-y-1 p-3 font-mono text-xs">
+          <div><span className="mp-sub">X:</span> <span className="text-[var(--px-cyan)]">{gps.position.x.toFixed(1)}m</span></div>
+          <div><span className="mp-sub">Y:</span> <span className="text-[var(--px-cyan)]">{gps.position.y.toFixed(1)}m</span></div>
+          <div><span className="mp-sub">Z:</span> <span className="text-[var(--px-amber)]">{gps.position.z.toFixed(1)}m</span></div>
+          <div><span className="mp-sub">Floor:</span> <span className="text-[var(--px-cyan)]">{currentFloor === -1 ? 'B1' : currentFloor}</span></div>
         </div>
       </div>
 
-      {/* Floor Tabs */}
-      <div className="flex gap-2 px-4 py-3 bg-dark-800 border-t border-dark-700">
+      {/* Floor Tabs (scroll sideways on narrow screens instead of spilling off) */}
+      <div className="mp-strip flex gap-2 overflow-x-auto px-3 py-3 sm:px-4" role="group" aria-label="Floor">
         {FLOORS.map(f => {
           const count = nodes.filter(n => n.floor === f).length;
           const label = f === -1 ? 'B1' : `L${f}`;
           return (
             <button
               key={f}
+              type="button"
               onClick={() => changeFloor(f)}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition ${
-                currentFloor === f
-                  ? 'bg-white text-black'
-                  : 'bg-gray-600 text-white hover:bg-gray-400'
-              }`}
+              className="mp-chip"
+              aria-pressed={currentFloor === f}
+              aria-label={`Floor ${label}, ${count} node${count === 1 ? '' : 's'}`}
             >
               {label}
-              <span className="ml-1 text-xs opacity-70">({count})</span>
+              <span className="mp-chip__count" aria-hidden="true">({count})</span>
             </button>
           );
         })}
@@ -518,106 +534,103 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
 
       {/* Z Indicator */}
       {showFloorHint && (
-        <div className="mx-4 my-3 p-3 bg-orange-500/10 border border-orange-500 rounded-lg text-sm text-orange-400">
-          ⬆️ Altitude changed! Consider updating floor.
+        <div className="mx-3 my-3 border-[3px] border-[var(--px-amber)] bg-black p-3 text-sm text-[var(--px-amber)] sm:mx-4" role="status">
+          ⬆ Altitude changed! Consider updating the floor.
         </div>
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 px-4 py-3 bg-dark-800 border-t border-dark-700">
-        <div className="glass rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-blue-400">{nodes.length}</div>
-          <div className="text-xs text-gray-400 uppercase mt-1">Nodes</div>
-        </div>
-        <div className="glass rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-green-400">{edges.length}</div>
-          <div className="text-xs text-gray-400 uppercase mt-1">Edges</div>
-        </div>
-        <div className="glass rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-orange-400">{verticalEdges.length}</div>
-          <div className="text-xs text-gray-400 uppercase mt-1">Vertical</div>
-        </div>
-        <div className="glass rounded-lg p-3 text-center">
-          <div className="text-2xl font-bold text-purple-400">{Math.round(totalDistance)}</div>
-          <div className="text-xs text-gray-400 uppercase mt-1">Meters</div>
-        </div>
+      <div className="mp-strip grid grid-cols-4 gap-2 px-3 py-3 sm:gap-3 sm:px-4">
+        {[
+          { value: nodes.length, label: 'Nodes', color: 'var(--px-cyan)' },
+          { value: edges.length, label: 'Edges', color: 'var(--px-green)' },
+          { value: verticalEdges.length, label: 'Vertical', color: 'var(--px-amber)' },
+          { value: Math.round(totalDistance), label: 'Metres', color: 'var(--px-purple)' },
+        ].map(({ value, label, color }) => (
+          <div key={label} className="mp-stat">
+            <div className="mp-stat__value" style={{ color }}>{value}</div>
+            <div className="mp-stat__label">{label}</div>
+          </div>
+        ))}
       </div>
 
       {/* Controls */}
-      <div className="p-4 bg-dark-900 border-t border-dark-700">
+      <div className="mp-strip p-3 sm:p-4">
         {gps.error && (
-          <div
-            role="alert"
-            className="mb-3 rounded-lg border border-red-500/40 bg-red-500/15 px-3 py-2 text-sm text-red-200"
-          >
-            {gps.error} — check that location access is allowed for this site.
+          <div role="alert" className="mp-alert mb-3">
+            {gps.error}. Check that location access is allowed for this site.
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           <button
+            type="button"
             onClick={toggleGPS}
-            className={`py-3 px-4 rounded-lg font-semibold text-sm transition ${
-              gps.isActive
-                ? 'bg-red-600 hover:bg-red-700 text-white'
-                : 'bg-green-600 hover:bg-green-400 text-white'
-            }`}
+            className={`px-btn mp-ctrl ${gps.isActive ? 'px-accent-red' : 'px-accent-green'}`}
           >
-            <Navigation className="inline mr-2" size={16} />
+            <Navigation size={16} aria-hidden="true" />
             {gps.isActive ? 'Stop GPS' : 'Start GPS'}
           </button>
           <button
+            type="button"
             onClick={toggleRecording}
             disabled={!gps.isActive}
-            className={`py-3 px-4 rounded-lg font-semibold text-sm transition disabled:opacity-40 ${
-              recording
-                ? 'bg-red-600 hover:bg-red-700 text-white'
-                : 'bg-purple-600 hover:bg-purple-700 text-white'
-            }`}
+            className={`px-btn mp-ctrl ${recording ? 'px-accent-red' : 'px-accent-purple'}`}
           >
-            {recording ? <StopIcon className="inline mr-2" size={16} /> : <Play className="inline mr-2" size={16} />}
+            {recording ? <StopIcon size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
             {recording ? 'Stop' : 'Record'}
           </button>
           <button
+            type="button"
             onClick={() => setShowModal(true)}
             disabled={!gps.isActive}
-            className="py-3 px-4 rounded-lg font-semibold text-sm bg-blue-600 hover:bg-blue-700 text-white transition disabled:opacity-40"
+            className="px-btn mp-ctrl px-accent-cyan"
           >
-            <MapPin className="inline mr-2" size={16} />
+            <MapPin size={16} aria-hidden="true" />
             Add Node
           </button>
         </div>
-        <button
-          onClick={handleSaveMap}
-          className="w-full mt-2 py-3 px-4 rounded-lg font-semibold text-sm bg-gray-400 hover:bg-gray-600 text-white transition"
-        >
-          <Save className="inline mr-2" size={16} />
+        <button type="button" onClick={handleSaveMap} className="px-btn mp-ctrl px-accent-amber mt-3 w-full">
+          <Save size={16} aria-hidden="true" />
           Save Map
         </button>
       </div>
 
       {/* Node Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-dark-700">
-            <h2 className="text-xl font-bold mb-4">Add Node</h2>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowModal(false);
+          }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="mp-node-title" className="px-box w-full max-w-md p-5 sm:p-6">
+            <h2 id="mp-node-title" className="px-title mb-4 text-2xl">Add Node</h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                addNode();
+              }}
+            >
             <div className="space-y-4">
               <div>
-                <label className="block text-xs text-gray-400 uppercase mb-2">Name / Room Code</label>
+                <label htmlFor="mp-node-name" className="px-label mb-2 block">Name / Room Code</label>
                 <input
+                  id="mp-node-name"
                   type="text"
                   value={nodeForm.name}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setNodeForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="e.g. E1A-03-01, Staircase A"
-                  className="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="px-input w-full"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-400 uppercase mb-2">Type</label>
+                <label htmlFor="mp-node-type" className="px-label mb-2 block">Type</label>
                 <select
+                  id="mp-node-type"
                   value={nodeForm.type}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) => setNodeForm(f => ({ ...f, type: e.target.value as NodeType }))}
-                  className="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="px-input w-full"
                 >
                   <option value="room">Room</option>
                   <option value="junction">Junction</option>
@@ -628,43 +641,39 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap }) => {
                   <option value="other">Other</option>
                 </select>
                 {(nodeForm.type === 'stairs' || nodeForm.type === 'lift') && (
-                  <p className="text-xs text-orange-400 mt-2">
+                  <p className="text-xs text-[var(--px-amber)] mt-2">
                     ⚡ <strong>Tip:</strong> Use the same name on different floors to auto-connect vertically!
                   </p>
                 )}
               </div>
               <div>
-                <label className="block text-xs text-gray-400 uppercase mb-2">Aliases (comma separated)</label>
+                <label htmlFor="mp-node-aliases" className="px-label mb-2 block">Aliases (comma separated)</label>
                 <input
+                  id="mp-node-aliases"
                   type="text"
                   value={nodeForm.aliases}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setNodeForm(f => ({ ...f, aliases: e.target.value }))}
                   placeholder="e.g. LT1, Main Stairs"
-                  className="w-full px-4 py-2 bg-dark-900 border border-dark-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  className="px-input w-full"
                 />
               </div>
             </div>
-            <div className="flex gap-2 mt-6">
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 py-3 px-4 rounded-lg font-semibold text-sm bg-gray-600 hover:bg-gray-700 transition"
-              >
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => setShowModal(false)} className="px-btn">
                 Cancel
               </button>
-              <button
-                onClick={addNode}
-                className="flex-1 py-3 px-4 rounded-lg font-semibold text-sm bg-green-600 hover:bg-green-700 text-white transition"
-              >
+              <button type="submit" className="px-btn px-accent-green">
                 Save
               </button>
             </div>
+            </form>
           </div>
         </div>
       )}
 
       {/* Toast */}
       {toast.show && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 glass rounded-lg px-6 py-3 text-sm font-medium z-50 animate-fade-in">
+        <div role="status" className="px-box px-box--accent animate-fade-in fixed bottom-24 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 px-5 py-2 text-sm">
           {toast.message}
         </div>
       )}

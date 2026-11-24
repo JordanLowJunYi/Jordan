@@ -1,11 +1,18 @@
-import React, { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
+import React, { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { Route, ArrowRight, Clock, Ruler, Map, ChevronDown, Navigation } from 'lucide-react';
 import { storageUtils } from '../utils/storage';
+import { useResizeTick } from '../utils/useResizeTick';
 import { findKShortestPaths, formatDistance, formatDuration } from '../utils/helpers';
 import type { PathfindingProps, MapData, MapNode, MapEdge, ViewState, SavedMapInfo, PathResult, Graph, Coordinates } from '../utils/types';
 
+// One colour per route option; matches the line colours drawn on the canvas.
+// (The old card styles built class names like `bg-${color}-500/10` at runtime,
+// which Tailwind never generates, so routes 2 and 3 had no selected look.)
+const ROUTE_COLORS = ['#10b981', '#3b82f6', '#a855f7'];
+
 const Pathfinding: React.FC<PathfindingProps> = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const resizeTick = useResizeTick();
   const fromInputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
   
@@ -72,8 +79,12 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
   };
 
   // Get nodes and edges from mapData
-  const nodes: MapNode[] = mapData ? (Array.isArray(mapData.nodes) ? mapData.nodes : Object.values(mapData.nodes || {})) : [];
-  const edges: MapEdge[] = mapData?.edges || [];
+  // Memoised so the draw effect below only reruns when the map really changes.
+  const nodes: MapNode[] = useMemo(
+    () => (mapData ? (Array.isArray(mapData.nodes) ? mapData.nodes : Object.values(mapData.nodes || {})) : []),
+    [mapData],
+  );
+  const edges: MapEdge[] = useMemo(() => mapData?.edges || [], [mapData]);
   const graph: Graph = mapData?.graph || {};
 
   // Filter nodes based on search query (matches name or aliases)
@@ -176,7 +187,8 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
     const canvas = canvasRef.current;
     const W = canvas?.width || 800;
     const H = canvas?.height || 600;
-    const padding = 120;
+    // proportional on small canvases, or a phone-sized map squashes the route to a dot
+    const padding = Math.min(120, W * 0.2, H * 0.2);
 
     const rangeX = maxX - minX || 1;
     const rangeY = maxY - minY || 1;
@@ -218,13 +230,13 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
     const cy = H / 2 + view.panY;
     const scale = view.scale;
 
-    // Background
-    ctx.fillStyle = '#0a0a0b';
+    // Background (arcade night sky)
+    ctx.fillStyle = '#0b0a18';
     ctx.fillRect(0, 0, W, H);
 
     // Grid
     const gridSize = Math.max(20, 100 / scale);
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.strokeStyle = 'rgba(167, 139, 250, 0.14)';
     ctx.lineWidth = 1;
 
     for (let x = (cx % gridSize); x < W; x += gridSize) {
@@ -277,8 +289,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
         if (edge) {
           const points = edge.pathPoints || edge.points || [];
           if (points.length >= 2) {
-            const colors = ['#10b981', '#3b82f6', '#a855f7'];
-            const color = colors[selectedPath] || '#10b981';
+            const color = ROUTE_COLORS[selectedPath] || ROUTE_COLORS[0];
             
             // Glow effect
             ctx.strokeStyle = color + '30';
@@ -335,7 +346,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
         // Label background
         const text = node.name.slice(0, 15);
-        ctx.font = '500 12px system-ui, sans-serif';
+        ctx.font = '500 12px "Pixelify Sans", system-ui, sans-serif';
         const metrics = ctx.measureText(text);
         const labelY = py + 24;
         
@@ -352,7 +363,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
         // Step number for intermediate nodes
         if (!isStart && !isEnd) {
           ctx.fillStyle = '#fff';
-          ctx.font = 'bold 10px system-ui, sans-serif';
+          ctx.font = 'bold 10px "Pixelify Sans", system-ui, sans-serif';
           ctx.fillText(idx.toString(), px, py + 4);
         }
       });
@@ -382,7 +393,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
         }
       });
     }
-  }, [view, mapData, paths, selectedPath, fromNode, toNode, nodes, edges]);
+  }, [resizeTick, view, mapData, paths, selectedPath, fromNode, toNode, nodes, edges]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -399,11 +410,13 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
     return () => document.removeEventListener('click', handleClick);
   }, []);
 
-  const handleMouseDown = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
+  // Pointer events so dragging pans on touch screens too (canvas is touch-action: none).
+  const handleMouseDown = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     setView(v => ({ ...v, isPanning: true, lastX: e.clientX, lastY: e.clientY }));
   };
 
-  const handleMouseMove = (e: ReactMouseEvent<HTMLCanvasElement>): void => {
+  const handleMouseMove = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
     if (!view.isPanning) return;
     setView(v => ({
       ...v,
@@ -423,56 +436,57 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0b]">
+    <div className="h-full flex flex-col">
       {/* Header with Map Selector */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+      <div className="mp-head flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <h2 className="text-lg font-semibold text-white/90">Pathfinding</h2>
-          <p className="text-xs text-white/40 mt-0.5">Find routes between locations</p>
+          <h2 className="px-title text-2xl">Pathfinding</h2>
+          <p className="mp-sub mt-0.5 text-sm">Find routes between locations</p>
         </div>
-        
+
         {/* Map Selector */}
         <div className="relative">
           <button
+            type="button"
             onClick={() => setShowMapDropdown(!showMapDropdown)}
-            className="flex items-center gap-3 px-4 py-2.5 bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg transition-all"
+            className="px-btn px-btn--small"
+            aria-haspopup="true"
+            aria-expanded={showMapDropdown}
           >
-            <Map size={16} className="text-emerald-400" />
-            <span className="text-sm font-medium text-white/80">
+            <Map size={16} aria-hidden="true" />
+            <span className="max-w-[10rem] truncate normal-case">
               {selectedMapName || 'Select a map'}
             </span>
-            <ChevronDown size={16} className={`text-white/40 transition-transform ${showMapDropdown ? 'rotate-180' : ''}`} />
+            <ChevronDown size={16} aria-hidden="true" className={showMapDropdown ? 'rotate-180' : ''} />
           </button>
-          
+
           {showMapDropdown && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowMapDropdown(false)} />
-              <div className="absolute right-0 top-full mt-2 w-64 bg-[#141416] border border-white/[0.08] rounded-xl shadow-2xl z-50 overflow-hidden">
-                <div className="p-2 border-b border-white/[0.06]">
-                  <p className="text-xs text-white/40 px-2">Saved Maps</p>
-                </div>
+              <div className="mp-menu absolute right-0 top-full z-50 mt-3 w-64 max-w-[calc(100vw-6rem)] overflow-hidden">
+                <p className="px-label border-b-2 border-[#1c1833] px-4 py-2">Saved Maps</p>
                 <div className="max-h-64 overflow-y-auto">
                   {savedMaps.length === 0 ? (
                     <div className="px-4 py-6 text-center">
-                      <p className="text-sm text-white/40">No saved maps</p>
-                      <p className="text-xs text-white/25 mt-1">Create one in the Mapper tab</p>
+                      <p className="mp-sub text-sm">No saved maps</p>
+                      <p className="mp-sub mt-1 text-xs">Create one in the Mapper tab</p>
                     </div>
                   ) : (
                     savedMaps.map(map => (
                       <button
+                        type="button"
                         key={map.name}
                         onClick={() => handleSelectMap(map.name)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.05] transition-colors ${
-                          selectedMapName === map.name ? 'bg-emerald-500/10' : ''
-                        }`}
+                        className="mp-menu-item"
+                        aria-current={selectedMapName === map.name ? 'true' : undefined}
                       >
-                        <div className={`w-2 h-2 rounded-full ${selectedMapName === map.name ? 'bg-emerald-400' : 'bg-white/20'}`} />
-                        <div className="flex-1 text-left">
-                          <p className="text-sm font-medium text-white/80">{map.name}</p>
-                          <p className="text-[10px] text-white/30">
+                        <span aria-hidden="true" className={selectedMapName === map.name ? 'text-[var(--px-accent)]' : 'text-[var(--px-faint)]'}>■</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">{map.name}</span>
+                          <span className="mp-sub block text-[11px]">
                             {new Date(map.savedAt).toLocaleDateString()}
-                          </p>
-                        </div>
+                          </span>
+                        </span>
                       </button>
                     ))
                   )}
@@ -487,26 +501,27 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
         // Empty state
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center p-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.05] flex items-center justify-center">
-              <Navigation size={28} className="text-white/20" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center border-[3px] border-[var(--px-faint)] bg-black">
+              <Navigation size={28} className="text-[var(--px-dim)]" aria-hidden="true" />
             </div>
-            <h3 className="text-lg font-semibold text-white/80 mb-2">No Map Selected</h3>
-            <p className="text-sm text-white/40 max-w-xs">
-              Select a saved map from the dropdown above to start pathfinding
+            <h3 className="px-title mb-2 text-xl">No Map Selected</h3>
+            <p className="mp-sub max-w-xs text-sm">
+              Select a saved map from the menu above to start pathfinding
             </p>
           </div>
         </div>
       ) : (
         <>
           {/* Search Section */}
-          <div className="px-6 py-4 border-b border-white/[0.06] space-y-3">
-            <div className="flex gap-3">
+          <div className="mp-head space-y-3 px-4 py-4 sm:px-6">
+            <div className="flex gap-2 sm:gap-3">
               {/* From Input */}
-              <div className="flex-1 relative from-dropdown-container">
-                <label className="block text-[10px] text-white/40 uppercase tracking-wide mb-1.5">From</label>
+              <div className="flex-1 min-w-0 relative from-dropdown-container">
+                <label htmlFor="mp-from" className="px-label mb-1.5 block">From</label>
                 <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-emerald-500" />
+                  <div className="absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 bg-emerald-500" aria-hidden="true" />
                   <input
+                    id="mp-from"
                     ref={fromInputRef}
                     type="text"
                     value={fromQuery}
@@ -517,33 +532,31 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
                       setPaths([]);
                     }}
                     onFocus={() => setShowFromDropdown(true)}
-                    placeholder="Search start location..."
-                    className="w-full pl-8 pr-4 py-2.5 bg-white/[0.05] border border-white/[0.08] rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-emerald-500/50 focus:bg-white/[0.08] transition-all"
+                    onKeyDown={(e) => {
+                      // Enter picks the top suggestion, Escape closes the list
+                      if (e.key === 'Enter' && fromSuggestions[0]) selectFromNode(fromSuggestions[0]);
+                      if (e.key === 'Escape') setShowFromDropdown(false);
+                    }}
+                    placeholder="Start location…"
+                    autoComplete="off"
+                    className="px-input mp-input-dot w-full"
                   />
                 </div>
-                
+
                 {showFromDropdown && fromSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#141416] border border-white/[0.08] rounded-xl shadow-2xl z-20 overflow-hidden">
+                  <div className="mp-menu absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden">
                     {fromSuggestions.map(node => (
                       <button
+                        type="button"
                         key={node.id}
                         onClick={() => selectFromNode(node)}
-                        className="w-full px-4 py-3 text-left hover:bg-white/[0.05] transition-colors border-b border-white/[0.04] last:border-0"
+                        className="mp-menu-item mp-menu-item--stack"
                       >
-                        <div className="text-sm font-medium text-white/90">{node.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-white/40 capitalize">{node.type}</span>
-                          <span className="text-[10px] text-white/20">•</span>
-                          <span className="text-[10px] text-white/40">
-                            {node.floor === -1 ? 'B1' : `L${node.floor}`}
-                          </span>
-                          {node.aliases?.length > 0 && (
-                            <>
-                              <span className="text-[10px] text-white/20">•</span>
-                              <span className="text-[10px] text-emerald-400/60">{node.aliases[0]}</span>
-                            </>
-                          )}
-                        </div>
+                        <span className="block truncate text-sm">{node.name}</span>
+                        <span className="mp-sub mt-0.5 block text-[11px] capitalize">
+                          {node.type} • {node.floor === -1 ? 'B1' : `L${node.floor}`}
+                          {node.aliases?.length > 0 && <span className="normal-case text-[var(--px-green)]"> • {node.aliases[0]}</span>}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -552,19 +565,22 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
               {/* Swap Button */}
               <button
+                type="button"
                 onClick={swapLocations}
-                className="self-end mb-0.5 w-10 h-10 rounded-lg bg-white/[0.05] border border-white/[0.08] flex items-center justify-center hover:bg-white/[0.08] transition-colors"
-                title="Swap locations"
+                className="px-btn px-btn--icon mb-0.5 self-end"
+                title="Swap start and destination"
+                aria-label="Swap start and destination"
               >
-                <ArrowRight size={16} className="text-white/40 rotate-90" />
+                <ArrowRight size={16} className="rotate-90" aria-hidden="true" />
               </button>
 
               {/* To Input */}
-              <div className="flex-1 relative to-dropdown-container">
-                <label className="block text-[10px] text-white/40 uppercase tracking-wide mb-1.5">To</label>
+              <div className="flex-1 min-w-0 relative to-dropdown-container">
+                <label htmlFor="mp-to" className="px-label mb-1.5 block">To</label>
                 <div className="relative">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-red-500" />
+                  <div className="absolute left-3 top-1/2 h-2.5 w-2.5 -translate-y-1/2 bg-red-500" aria-hidden="true" />
                   <input
+                    id="mp-to"
                     ref={toInputRef}
                     type="text"
                     value={toQuery}
@@ -575,33 +591,30 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
                       setPaths([]);
                     }}
                     onFocus={() => setShowToDropdown(true)}
-                    placeholder="Search destination..."
-                    className="w-full pl-8 pr-4 py-2.5 bg-white/[0.05] border border-white/[0.08] rounded-lg text-sm text-white placeholder-white/30 focus:outline-none focus:border-red-500/50 focus:bg-white/[0.08] transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && toSuggestions[0]) selectToNode(toSuggestions[0]);
+                      if (e.key === 'Escape') setShowToDropdown(false);
+                    }}
+                    placeholder="Destination…"
+                    autoComplete="off"
+                    className="px-input mp-input-dot w-full"
                   />
                 </div>
-                
+
                 {showToDropdown && toSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-[#141416] border border-white/[0.08] rounded-xl shadow-2xl z-20 overflow-hidden">
+                  <div className="mp-menu absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden">
                     {toSuggestions.map(node => (
                       <button
+                        type="button"
                         key={node.id}
                         onClick={() => selectToNode(node)}
-                        className="w-full px-4 py-3 text-left hover:bg-white/[0.05] transition-colors border-b border-white/[0.04] last:border-0"
+                        className="mp-menu-item mp-menu-item--stack"
                       >
-                        <div className="text-sm font-medium text-white/90">{node.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-white/40 capitalize">{node.type}</span>
-                          <span className="text-[10px] text-white/20">•</span>
-                          <span className="text-[10px] text-white/40">
-                            {node.floor === -1 ? 'B1' : `L${node.floor}`}
-                          </span>
-                          {node.aliases?.length > 0 && (
-                            <>
-                              <span className="text-[10px] text-white/20">•</span>
-                              <span className="text-[10px] text-emerald-400/60">{node.aliases[0]}</span>
-                            </>
-                          )}
-                        </div>
+                        <span className="block truncate text-sm">{node.name}</span>
+                        <span className="mp-sub mt-0.5 block text-[11px] capitalize">
+                          {node.type} • {node.floor === -1 ? 'B1' : `L${node.floor}`}
+                          {node.aliases?.length > 0 && <span className="normal-case text-[var(--px-green)]"> • {node.aliases[0]}</span>}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -611,46 +624,49 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
             {/* Error Message */}
             {searchError && (
-              <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
-                <p className="text-xs text-red-400">{searchError}</p>
+              <div className="mp-alert" role="alert">
+                {searchError}
               </div>
             )}
 
             {/* Find Routes Button */}
             <button
+              type="button"
               onClick={findPaths}
               disabled={!fromNode || !toNode}
-              className="w-full py-2.5 px-4 rounded-lg font-medium text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-emerald-600 flex items-center justify-center gap-2"
+              className="px-btn w-full"
             >
-              <Route size={16} />
+              <Route size={16} aria-hidden="true" />
               Find Routes
             </button>
           </div>
 
           {/* Canvas */}
-          <div className="flex-1 relative">
-            <canvas 
+          <div className="relative min-h-[14rem] flex-1">
+            <canvas
               ref={canvasRef}
-              className="w-full h-full cursor-grab active:cursor-grabbing"
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
+              role="img"
+              aria-label={`Map of ${selectedMapName}${paths.length ? ` with route ${selectedPath + 1} highlighted` : ''}. Drag to pan.`}
+              className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
+              onPointerDown={handleMouseDown}
+              onPointerMove={handleMouseMove}
+              onPointerUp={handleMouseUp}
+              onPointerCancel={handleMouseLeave}
             />
 
             {/* Selected locations indicator */}
             {(fromNode || toNode) && paths.length === 0 && (
-              <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm border border-white/[0.08] rounded-xl p-3 space-y-2">
+              <div className="mp-panel absolute left-3 top-3 space-y-2 p-3">
                 {fromNode && (
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs text-white/70">{fromNode.name}</span>
+                    <div className="h-2.5 w-2.5 bg-emerald-500" aria-hidden="true" />
+                    <span className="text-xs">From: {fromNode.name}</span>
                   </div>
                 )}
                 {toNode && (
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-red-500" />
-                    <span className="text-xs text-white/70">{toNode.name}</span>
+                    <div className="h-2.5 w-2.5 bg-red-500" aria-hidden="true" />
+                    <span className="text-xs">To: {toNode.name}</span>
                   </div>
                 )}
               </div>
@@ -659,80 +675,77 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
           {/* Routes Panel */}
           {paths.length > 0 && (
-            <div className="border-t border-white/[0.06] bg-[#0a0a0b]">
-              <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
+            <div className="mp-strip">
+              <div className="max-h-72 space-y-3 overflow-y-auto p-3 sm:p-4">
                 {paths.map((path, idx) => {
                   const isSelected = selectedPath === idx;
-                  const colors = ['emerald', 'blue', 'purple'];
-                  const color = colors[idx] || 'emerald';
-                  
+                  const color = ROUTE_COLORS[idx] || ROUTE_COLORS[0];
+
                   return (
                     <button
+                      type="button"
                       key={idx}
                       onClick={() => {
                         setSelectedPath(idx);
                         fitPathToView(path);
                       }}
-                      className={`w-full p-4 rounded-xl text-left transition-all ${
-                        isSelected
-                          ? `bg-${color}-500/10 border border-${color}-500/30`
-                          : 'bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05]'
-                      }`}
+                      aria-pressed={isSelected}
+                      className="block w-full border-[3px] bg-black p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--px-accent)] sm:p-4"
+                      style={{
+                        borderColor: isSelected ? color : 'var(--px-faint)',
+                        boxShadow: isSelected ? `4px 4px 0 0 ${color}` : undefined,
+                      }}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full ${
-                            idx === 0 ? 'bg-emerald-500' : 
-                            idx === 1 ? 'bg-blue-500' : 
-                            'bg-purple-500'
-                          }`} />
-                          <span className="font-semibold text-sm text-white/90">
+                          <div className="h-2.5 w-2.5" style={{ background: color }} aria-hidden="true" />
+                          <span className="text-sm font-semibold">
                             Route {idx + 1}
-                            {idx === 0 && <span className="ml-2 text-xs font-normal text-emerald-400">(Shortest)</span>}
+                            {idx === 0 && <span className="ml-2 text-xs font-normal text-[var(--px-green)]">(Shortest)</span>}
                           </span>
                         </div>
                         {idx !== 0 && (
-                          <span className="text-[10px] text-white/40 bg-white/[0.05] px-2 py-0.5 rounded">
+                          <span className="mp-sub border-2 border-[var(--px-faint)] px-2 py-0.5 text-[11px]">
                             +{formatDistance(path.distance - paths[0].distance)}
                           </span>
                         )}
                       </div>
-                      
-                      <div className="flex items-center gap-4 text-xs text-white/50">
+
+                      <div className="mp-sub flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                         <div className="flex items-center gap-1.5">
-                          <Ruler size={12} />
+                          <Ruler size={12} aria-hidden="true" />
                           <span>{formatDistance(path.distance)}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <Clock size={12} />
+                          <Clock size={12} aria-hidden="true" />
                           <span>{formatDuration(path.distance)}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <ArrowRight size={12} />
+                          <ArrowRight size={12} aria-hidden="true" />
                           <span>{path.path.length} stops</span>
                         </div>
                       </div>
 
                       {isSelected && path.nodes && (
-                        <div className="mt-3 pt-3 border-t border-white/[0.06]">
+                        <div className="mt-3 border-t-2 border-[#1c1833] pt-3">
                           <div className="space-y-2">
                             {path.nodes.map((node, nodeIdx) => (
                               <div key={node.id} className="flex items-center gap-3">
-                                <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                  nodeIdx === 0 ? 'bg-emerald-500/20 text-emerald-400' :
-                                  nodeIdx === path.nodes!.length - 1 ? 'bg-red-500/20 text-red-400' :
-                                  'bg-white/[0.08] text-white/60'
+                                <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center text-[11px] font-bold ${
+                                  nodeIdx === 0 ? 'bg-emerald-500/20 text-[var(--px-green)]' :
+                                  nodeIdx === path.nodes!.length - 1 ? 'bg-red-500/20 text-[var(--px-red)]' :
+                                  'bg-white/[0.08] text-[var(--px-dim)]'
                                 }`}>
                                   {nodeIdx === 0 ? 'A' : nodeIdx === path.nodes!.length - 1 ? 'B' : nodeIdx}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-white/80 truncate">{node.name}</p>
-                                  <p className="text-[10px] text-white/40">
+                                  <p className="truncate text-xs font-medium">{node.name}</p>
+                                  <p className="mp-sub text-[11px]">
                                     {node.type} • {node.floor === -1 ? 'B1' : `L${node.floor}`}
                                   </p>
                                 </div>
                                 {nodeIdx < path.nodes!.length - 1 && (
-                                  <ArrowRight size={12} className="text-white/20 flex-shrink-0" />
+                                  <ArrowRight size={12} className="flex-shrink-0 text-[var(--px-faint)]" aria-hidden="true" />
                                 )}
                               </div>
                             ))}

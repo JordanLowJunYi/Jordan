@@ -1,66 +1,39 @@
-import React, { useState } from "react";
+import { memo, type CSSProperties } from 'react';
 
 interface MaskedWordProps {
   word: string;
   revealed: boolean;
-  hint?: string; // guessed word
+  /** -1 = not highlighted. 0 and 1 alternate so the flash replays on each new guess. */
+  hit?: number;
+  /** a revealed body word that is also a title word */
+  titleWord?: boolean;
+  /** title-row styling */
+  big?: boolean;
 }
 
-const MaskedWord: React.FC<MaskedWordProps> = ({ word, revealed, hint }) => {
-  const [showLength, setShowLength] = useState(false);
-  const widthCh = word.length + 0.5;
-
-  const handleClick = () => {
-    if (revealed) return;
-    setShowLength(true);
-    setTimeout(() => setShowLength(false), 1000); // fade out after 1s
-  };
-
-  // ✅ If revealed, just show plain text without masking box
+/**
+ * One word of the article. A hidden word is a dark pixel bar as wide as the
+ * word has letters (click it to see the count). The hidden text itself is
+ * never put in the DOM, so find-in-page and view-source can't give it away.
+ * Screen readers hear "7 letters" through the bar's data-sr text (see CSS).
+ */
+function MaskedWord({ word, revealed, hit = -1, titleWord = false, big = false }: MaskedWordProps) {
   if (revealed) {
-    return <span className="m-0.5">{word}</span>;
+    let cls = 'pd-word';
+    if (titleWord) cls += ' pd-word--title';
+    if (hit >= 0) cls += ` pd-hit-${hit}`;
+    return <span className={cls}>{word}</span>;
   }
-
+  const n = [...word].length;
   return (
     <span
-      className="inline-block m-0.5 px-1 py-0.5 border rounded-md text-center align-middle relative cursor-pointer"
-      style={{
-        minWidth: `${widthCh}ch`,
-        height: "1.5em",
-        lineHeight: "1.5em",
-        backgroundColor: "#9ca3af",
-        color: hint ? "white" : "#9ca3af", // ✅ white text for hints
-        fontWeight: hint ? "bold" : "normal",
-        position: "relative",
-      }}
-      onClick={handleClick}
-    >
-      {hint && (
-        <span
-          style={{
-            display: "inline-block",
-            position: "relative",
-            top: "-0.2em", // ✅ moves hint slightly up
-          }}
-        >
-          {hint}
-        </span>
-      )}
-
-      {!hint && ""}
-      {showLength && (
-        <span
-          className="absolute inset-0 flex items-center justify-center text-white font-bold"
-          style={{
-            backgroundColor: "rgba(0,0,0,0.5)",
-            animation: "fadeOut 1s forwards",
-          }}
-        >
-          {word.length}
-        </span>
-      )}
-    </span>
+      className={big ? 'pd-mask pd-mask--title' : 'pd-mask'}
+      style={{ '--n': n } as CSSProperties}
+      data-n={n}
+      data-sr={`${n} letter${n === 1 ? '' : 's'}`}
+    />
   );
-};
+}
 
-export default MaskedWord;
+// Memoised: a guess re-renders only the words whose state changed.
+export default memo(MaskedWord);

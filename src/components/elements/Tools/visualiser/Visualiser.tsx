@@ -42,8 +42,12 @@ interface Prefs {
 }
 
 export default function Visualiser() {
-  const [prefs] = useState<Prefs>(() => load<Prefs>('visualiser', { mode: 'bars', theme: THEMES[0].id }));
-  const [mode, setMode] = useState<Mode>(MODES.some((m) => m.id === prefs.mode) ? prefs.mode : 'bars');
+  // a saved `null` (or anything that isn't an object) used to crash the page
+  const [prefs] = useState<Partial<Prefs>>(() => {
+    const saved = load<unknown>('visualiser', null);
+    return saved && typeof saved === 'object' ? (saved as Partial<Prefs>) : {};
+  });
+  const [mode, setMode] = useState<Mode>(MODES.find((m) => m.id === prefs.mode)?.id ?? 'bars');
   const [theme, setTheme] = useState<Theme>(THEMES.find((t) => t.id === prefs.theme) ?? THEMES[0]);
   const [source, setSource] = useState<SourceKind>('demo');
   const [playing, setPlaying] = useState(false);
@@ -363,7 +367,7 @@ export default function Visualiser() {
   return (
     <GameShell title="Visualiser" accent="purple" subtitle="Turn sound into pixels.">
       <div className="vis mx-auto flex max-w-4xl flex-col gap-5">
-        <div role="group" aria-label="Sound source" className="grid grid-cols-3 gap-3">
+        <div role="group" aria-label="Sound source" className="vis-sources grid gap-3">
           {SOURCES.map(({ id, short, long, Icon }) => (
             <button
               key={id}
@@ -413,7 +417,7 @@ export default function Visualiser() {
               {playing ? 'Pause' : 'Play'}
             </button>
 
-            <div role="group" aria-label="Visual style" className="flex gap-2">
+            <div role="group" aria-label="Visual style" className="flex flex-wrap gap-2">
               {MODES.map(({ id, label, Icon }) => (
                 <button
                   key={id}
@@ -431,7 +435,7 @@ export default function Visualiser() {
               ))}
             </div>
 
-            <div role="group" aria-label="Colours" className="flex gap-3">
+            <div role="group" aria-label="Colours" className="flex flex-wrap gap-3">
               {THEMES.map((t) => (
                 <button
                   key={t.id}

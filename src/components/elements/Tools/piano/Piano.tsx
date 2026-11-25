@@ -25,8 +25,12 @@ export default function Piano() {
     const saved = load<unknown>('piano:mode', 'free');
     return isMode(saved) ? saved : 'free';
   });
-  const [names, setNames] = useState(() => load('piano:names', true));
-  const [letters, setLetters] = useState(() => load('piano:letters', !coarsePointer()));
+  // compare with true/false so an odd saved value can't leave a toggle half-on
+  const [names, setNames] = useState(() => load<unknown>('piano:names', true) !== false);
+  const [letters, setLetters] = useState(() => {
+    const saved = load<unknown>('piano:letters', null);
+    return typeof saved === 'boolean' ? saved : !coarsePointer();
+  });
   const [muted] = useMuted();
   const status = usePianoStatus();
   const tabs = useRef(new Map<Mode, HTMLButtonElement>());

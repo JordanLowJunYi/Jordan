@@ -35,7 +35,31 @@
   cursor: not-allowed;
 }
 
+/* Phones and tablets: the guess list drops down inside the sticky bar, in its
+   own short scroll box, so it's reachable from anywhere in the article. */
+.pd-drawer {
+  max-height: min(45vh, 22rem);
+  margin-top: 0.6rem;
+  padding: 0 0.25rem 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 3px solid var(--px-faint);
+}
+
+/* A failed "Random article" or "Today's article": the current one stays. */
+.pd-notice {
+  padding: 0.6rem 0.8rem 0.8rem;
+  border: 3px solid var(--px-red);
+  background: #000;
+}
+.pd-notice__label {
+  color: var(--px-red);
+}
+
 .pd-feedback {
+  /* beside the guess count when there's room, above it when the text is zoomed */
+  flex: 1 1 10rem;
+  min-width: 0;
   min-height: 1.5em;
   overflow-wrap: anywhere;
 }

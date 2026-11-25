@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ZoomIn, ZoomOut, Home, Square, Download, ChevronDown, Map } from 'lucide-react';
 import { storageUtils } from '../utils/storage';
-import { useResizeTick } from '../utils/useResizeTick';
+import { fitCanvas, useResizeTick } from '../utils/useResizeTick';
 import type { VisualizerProps, MapData, MapNode, MapEdge, ViewState, SavedMapInfo, Coordinates } from '../utils/types';
 
 const Visualizer: React.FC<VisualizerProps> = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const resizeTick = useResizeTick();
   // Where a press started, so the click that ends a drag doesn't select or deselect a node.
   const press = useRef({ x: 0, y: 0, moved: false });
+  // the one pointer that is dragging the map (a second finger used to make it jump)
+  const panPointer = useRef<number | null>(null);
   const [currentFloor, setCurrentFloor] = useState<number>(1);
   const [selectedNode, setSelectedNode] = useState<MapNode | null>(null);
   const [mapData, setMapData] = useState<MapData | null>(null);
+  const resizeTick = useResizeTick(canvasRef, !!mapData);
   const [savedMaps, setSavedMaps] = useState<SavedMapInfo[]>([]);
   const [selectedMapName, setSelectedMapName] = useState<string>('');
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
@@ -77,13 +79,8 @@ const Visualizer: React.FC<VisualizerProps> = () => {
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
 
-    const W = canvas.width;
-    const H = canvas.height;
+    const { W, H } = fitCanvas(canvas, ctx);
     const cx = W / 2 + view.panX;
     const cy = H / 2 + view.panY;
     const scale = view.scale;
@@ -253,8 +250,9 @@ const Visualizer: React.FC<VisualizerProps> = () => {
     });
 
     const canvas = canvasRef.current;
-    const W = canvas?.width || 800;
-    const H = canvas?.height || 600;
+    // on-screen size (the bitmap is larger by the pixel ratio)
+    const W = canvas?.clientWidth || 800;
+    const H = canvas?.clientHeight || 600;
     // proportional on small canvases, or a phone-sized floor squashes into the middle
     const padding = Math.min(100, W * 0.18, H * 0.18);
 
@@ -290,8 +288,8 @@ const Visualizer: React.FC<VisualizerProps> = () => {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
     
-    const cx = canvas.width / 2 + view.panX;
-    const cy = canvas.height / 2 + view.panY;
+    const cx = rect.width / 2 + view.panX;
+    const cy = rect.height / 2 + view.panY;
 
     let closestNode: MapNode | null = null;
     let closestDist = 25;
@@ -325,14 +323,18 @@ const Visualizer: React.FC<VisualizerProps> = () => {
   const verticalEdges = edges.filter(e => e.isVertical);
 
   // Pointer events so dragging pans on touch screens too (canvas is touch-action: none).
+  // Only the first finger pans (with two, the map leapt between them).
   const handleMouseDown = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (panPointer.current !== null) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    panPointer.current = e.pointerId;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     press.current = { x: e.clientX, y: e.clientY, moved: false };
     setView(v => ({ ...v, isPanning: true, lastX: e.clientX, lastY: e.clientY }));
   };
 
   const handleMouseMove = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (!view.isPanning) return;
+    if (!view.isPanning || e.pointerId !== panPointer.current) return;
     if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 4) press.current.moved = true;
     setView(v => ({
       ...v,
@@ -343,11 +345,9 @@ const Visualizer: React.FC<VisualizerProps> = () => {
     }));
   };
 
-  const handleMouseUp = (): void => {
-    setView(v => ({ ...v, isPanning: false }));
-  };
-
-  const handleMouseLeave = (): void => {
+  const handleMouseUp = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (e.pointerId !== panPointer.current) return;
+    panPointer.current = null;
     setView(v => ({ ...v, isPanning: false }));
   };
 
@@ -438,7 +438,8 @@ const Visualizer: React.FC<VisualizerProps> = () => {
               onPointerDown={handleMouseDown}
               onPointerMove={handleMouseMove}
               onPointerUp={handleMouseUp}
-              onPointerCancel={handleMouseLeave}
+              onPointerCancel={handleMouseUp}
+              onLostPointerCapture={handleMouseUp}
               onClick={handleCanvasClick}
             />
 

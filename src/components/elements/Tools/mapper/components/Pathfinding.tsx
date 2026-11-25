@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { Route, ArrowRight, Clock, Ruler, Map, ChevronDown, Navigation } from 'lucide-react';
 import { storageUtils } from '../utils/storage';
-import { useResizeTick } from '../utils/useResizeTick';
+import { fitCanvas, useResizeTick } from '../utils/useResizeTick';
 import { findKShortestPaths, formatDistance, formatDuration } from '../utils/helpers';
 import type { PathfindingProps, MapData, MapNode, MapEdge, ViewState, SavedMapInfo, PathResult, Graph, Coordinates } from '../utils/types';
 
@@ -12,7 +12,8 @@ const ROUTE_COLORS = ['#10b981', '#3b82f6', '#a855f7'];
 
 const Pathfinding: React.FC<PathfindingProps> = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const resizeTick = useResizeTick();
+  // the one pointer that is dragging the map (a second finger used to make it jump)
+  const panPointer = useRef<number | null>(null);
   const fromInputRef = useRef<HTMLInputElement>(null);
   const toInputRef = useRef<HTMLInputElement>(null);
   
@@ -20,6 +21,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
   const [savedMaps, setSavedMaps] = useState<SavedMapInfo[]>([]);
   const [selectedMapName, setSelectedMapName] = useState<string>('');
   const [mapData, setMapData] = useState<MapData | null>(null);
+  const resizeTick = useResizeTick(canvasRef, !!mapData);
   const [showMapDropdown, setShowMapDropdown] = useState<boolean>(false);
   
   // Search state
@@ -139,11 +141,12 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
     setSearchError('');
     
-    // Build graph if not present
-    let pathGraph: Graph = graph;
-    if (!pathGraph || Object.keys(pathGraph).length === 0) {
-      pathGraph = {};
-      nodes.forEach(n => pathGraph[n.id] = []);
+    // Build the graph from the edges, the same ones drawn on the map. The saved
+    // graph is only a copy of them, and in an imported file it can be stale
+    // or missing nodes, so it's used only when a file has no edges at all.
+    const pathGraph: Graph = {};
+    nodes.forEach(n => pathGraph[n.id] = edges.length ? [] : [...(graph[n.id] ?? [])]);
+    if (edges.length) {
       edges.forEach(e => {
         if (pathGraph[e.from]) {
           pathGraph[e.from].push({ node: e.to, weight: e.distance, vertical: e.isVertical });
@@ -166,8 +169,15 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
     if (results.length === 0) {
       setSearchError('No path found between these locations');
     } else {
-      fitPathToView(results[0]);
+      fitSoon(results[0]);
     }
+  };
+
+  // Fit once the route list has rendered: it takes room from the canvas, so a
+  // fit measured before that was made for a taller map and pushed the route's
+  // ends (and their labels) off the bottom on phones.
+  const fitSoon = (path: PathResult): void => {
+    requestAnimationFrame(() => fitPathToView(path));
   };
 
   const fitPathToView = (path: PathResult): void => {
@@ -185,8 +195,9 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
     });
 
     const canvas = canvasRef.current;
-    const W = canvas?.width || 800;
-    const H = canvas?.height || 600;
+    // on-screen size (the bitmap is larger by the pixel ratio)
+    const W = canvas?.clientWidth || 800;
+    const H = canvas?.clientHeight || 600;
     // proportional on small canvases, or a phone-sized map squashes the route to a dot
     const padding = Math.min(120, W * 0.2, H * 0.2);
 
@@ -219,13 +230,8 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
 
-    const W = canvas.width;
-    const H = canvas.height;
+    const { W, H } = fitCanvas(canvas, ctx);
     const cx = W / 2 + view.panX;
     const cy = H / 2 + view.panY;
     const scale = view.scale;
@@ -281,10 +287,10 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
         const fromId = path.path[i];
         const toId = path.path[i + 1];
         
-        const edge = edges.find(e => 
-          (e.from === fromId && e.to === toId) ||
-          (e.from === toId && e.to === fromId)
-        );
+        // the shortest of any corridors between the two, as the route used it
+        const edge = edges
+          .filter(e => (e.from === fromId && e.to === toId) || (e.from === toId && e.to === fromId))
+          .sort((a, b) => a.distance - b.distance)[0];
 
         if (edge) {
           const points = edge.pathPoints || edge.points || [];
@@ -411,13 +417,17 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
   }, []);
 
   // Pointer events so dragging pans on touch screens too (canvas is touch-action: none).
+  // Only the first finger pans (with two, the map leapt between them).
   const handleMouseDown = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (panPointer.current !== null) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    panPointer.current = e.pointerId;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     setView(v => ({ ...v, isPanning: true, lastX: e.clientX, lastY: e.clientY }));
   };
 
   const handleMouseMove = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (!view.isPanning) return;
+    if (!view.isPanning || e.pointerId !== panPointer.current) return;
     setView(v => ({
       ...v,
       panX: v.panX + e.clientX - v.lastX,
@@ -427,11 +437,9 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
     }));
   };
 
-  const handleMouseUp = (): void => {
-    setView(v => ({ ...v, isPanning: false }));
-  };
-
-  const handleMouseLeave = (): void => {
+  const handleMouseUp = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (e.pointerId !== panPointer.current) return;
+    panPointer.current = null;
     setView(v => ({ ...v, isPanning: false }));
   };
 
@@ -651,7 +659,8 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
               onPointerDown={handleMouseDown}
               onPointerMove={handleMouseMove}
               onPointerUp={handleMouseUp}
-              onPointerCancel={handleMouseLeave}
+              onPointerCancel={handleMouseUp}
+              onLostPointerCapture={handleMouseUp}
             />
 
             {/* Selected locations indicator */}
@@ -687,7 +696,7 @@ const Pathfinding: React.FC<PathfindingProps> = () => {
                       key={idx}
                       onClick={() => {
                         setSelectedPath(idx);
-                        fitPathToView(path);
+                        fitSoon(path);
                       }}
                       aria-pressed={isSelected}
                       className="block w-full border-[3px] bg-black p-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--px-accent)] sm:p-4"

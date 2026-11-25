@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import Standard from '../standards/backgrounds/Standard';
 import { useReveal } from '../../lib/useReveal';
+import { prefersReducedMotion } from '../../lib/motion';
 import { hero, sections } from '../../content/siteContent';
 
 const Hero: React.FC = () => {
@@ -11,10 +12,13 @@ const Hero: React.FC = () => {
   const scopeRef = useRef<HTMLDivElement>(null);
   useReveal(scopeRef, '[data-reveal]', { y: 28, stagger: 0.12, start: 'top 95%' });
 
+  // pb-36 keeps the bouncing scroll arrow (72-132px up from the bottom) clear of
+  // the card when the card is taller than the screen: small phones, phones on
+  // their side.
   return (
     <div
       ref={scopeRef}
-      className="w-full min-h-dvh relative flex items-center justify-center py-24"
+      className="w-full min-h-dvh relative flex items-center justify-center pt-24 pb-36"
     >
       <Standard />
 
@@ -67,7 +71,10 @@ const Hero: React.FC = () => {
           type="button"
           aria-label="Scroll to projects"
           onClick={() =>
-            document.getElementById(firstSectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            document.getElementById(firstSectionId)?.scrollIntoView({
+              behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+              block: 'start',
+            })
           }
           className="flex flex-col items-center border-0 bg-transparent text-white/70 hover:text-white transition-colors cursor-pointer pointer-events-auto"
         >

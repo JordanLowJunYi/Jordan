@@ -67,6 +67,13 @@ export function createSong(): Song {
     const ac = audioContext();
     if (!ac || !master) return;
     master.gain.setTargetAtTime(isMuted() ? 0 : 1, ac.currentTime, 0.05);
+    // After a stall (a busy page, a throttled tab), skip the missed notes
+    // instead of playing them all at once.
+    if (nextTime < ac.currentTime - 0.1) {
+      const missed = Math.ceil((ac.currentTime - nextTime) / EIGHTH);
+      step += missed;
+      nextTime += missed * EIGHTH;
+    }
     while (nextTime < ac.currentTime + 0.15) {
       const i = step % LEAD.length;
       const note = LEAD[i];

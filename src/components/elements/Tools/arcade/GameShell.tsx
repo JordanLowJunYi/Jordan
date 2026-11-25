@@ -72,7 +72,10 @@ export function GameShell({
 
       <main className={`mx-auto px-4 pb-16 pt-6 sm:px-6 ${wide ? 'max-w-6xl' : 'max-w-3xl'}`}>
         <div className="mb-6 text-center">
-          <h1 className="px-title text-4xl sm:text-5xl">{title}</h1>
+          {/* On narrow phones with large text the title shrinks to the screen
+              width (min with 11vw) so words stay whole; wrap-break-word is the
+              last resort so it is never cut off. */}
+          <h1 className="px-title text-[min(2.25rem,11vw)] wrap-break-word sm:text-5xl">{title}</h1>
           {subtitle && <p className="mt-2 text-base text-[var(--px-dim)]">{subtitle}</p>}
         </div>
         {children}

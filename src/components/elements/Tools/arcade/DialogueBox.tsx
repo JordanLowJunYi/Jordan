@@ -137,6 +137,8 @@ export function DialogueBox({
               className="px-choice"
               data-active={i === cursor}
               onMouseEnter={() => setCursor(i)}
+              // Tab focus moves the ▶ too, so what you see is what Enter / Z picks
+              onFocus={() => setCursor(i)}
               onClick={() => {
                 sfx.select();
                 c.onSelect();

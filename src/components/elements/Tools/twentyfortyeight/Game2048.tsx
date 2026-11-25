@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { RotateCcw, Undo2 } from 'lucide-react';
@@ -97,6 +98,15 @@ function mergeSound(value: number) {
 }
 const slideSound = () => tone(260, 0.05, { type: 'triangle', volume: 0.05, slideTo: 180 });
 const bumpSound = () => tone(130, 0.08, { type: 'triangle', volume: 0.06 });
+
+/**
+ * After a mouse click, take focus off the button: otherwise the Enter that
+ * dismisses a later win / game-over message would press it again and wipe
+ * the board. Keyboard presses (detail 0) keep their focus.
+ */
+function dropMouseFocus(e: ReactMouseEvent<HTMLButtonElement>) {
+  if (e.detail > 0) e.currentTarget.blur();
+}
 
 function freshGame(): Game {
   return { tiles: newBoard(newId), score: 0, won: false, over: false, prev: null };
@@ -360,23 +370,33 @@ export default function Game2048() {
               </div>
             </div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               type="button"
               className="px-btn px-btn--small flex-1"
-              onClick={() => undo()}
+              onClick={(e) => {
+                undo();
+                dropMouseFocus(e);
+              }}
               disabled={!game.prev}
               aria-keyshortcuts="U"
             >
               <Undo2 size={14} aria-hidden="true" /> Undo
             </button>
-            <button type="button" className="px-btn px-btn--small flex-1 whitespace-nowrap" onClick={() => startNew()}>
+            <button
+              type="button"
+              className="px-btn px-btn--small flex-1 whitespace-nowrap"
+              onClick={(e) => {
+                startNew();
+                dropMouseFocus(e);
+              }}
+            >
               <RotateCcw size={14} aria-hidden="true" /> New game
             </button>
           </div>
         </div>
 
-        <div className="relative">
+        <div className="g48-stage relative">
           <div
             className={`g48-board px-box ${shaking ? 'px-shake' : ''}`}
             tabIndex={0}

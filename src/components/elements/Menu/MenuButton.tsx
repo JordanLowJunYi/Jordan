@@ -1,21 +1,36 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Menu from './Menu';
-import { playSound } from '../../../lib/sound';
+import { uiSound } from '../../../lib/sound';
 import './action.css';
 
 const MenuButton: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   const toggleMenu = (): void => {
-    playSound('audio/sound_effects/infographic-button.mp3');
+    uiSound(isMenuOpen ? 'close' : 'open');
     setIsMenuOpen((open) => !open);
   };
 
   const closeMenu = (): void => setIsMenuOpen(false);
 
+  // Escape closes the open menu and puts focus back on this button. An overlay
+  // opened on top (a project card, a letter) gets the Escape instead.
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.body.dataset.overlayOpen) return;
+      setIsMenuOpen(false);
+      toggleRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isMenuOpen]);
+
   return (
     <div className="social-container bg-black dark:bg-white">
       <button
+        ref={toggleRef}
         type="button"
         className="social-link dark:text-white dark:bg-black"
         onClick={toggleMenu}

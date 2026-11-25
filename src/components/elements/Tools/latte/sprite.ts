@@ -1,21 +1,22 @@
-// Latte's pixel sprite, built in code. Latte is a long-haired guinea pig with
-// an apricot-and-cream face, a white crest on the crown, dark eyes, and a fluffy
-// lilac-grey body with pale cream tips. The sprite faces right and is redrawn
-// from a few pose parameters, so every frame (idle, munching, hopping,
-// sleeping, sad) shares one shape.
+// Latte's pixel sprite, built in code. Latte is a calico (tricolour) guinea
+// pig in clean, unbrindled patches: a ginger head with a white blaze down the
+// front of the face and a white muzzle, a white collar and belly, a black
+// saddle over the back and a ginger rump, with dark eyes and pink ears' insides
+// and feet. The sprite faces right and is redrawn from a few pose parameters,
+// so every frame (idle, munching, hopping, sleeping, sad) shares one shape.
 
 export const PAL = {
-  o: '#3a2633', // outline (soft plum, not pure black)
-  g: '#a3959c', // lilac-grey body
-  G: '#7d7079', // body shadow
-  d: '#625660', // deep shadow
-  l: '#d3c8c6', // pale fur tips
-  L: '#eee6df', // palest tips
-  a: '#eab184', // apricot
-  A: '#c88a5e', // dark apricot
-  c: '#f7dfc4', // cream
-  w: '#fffaf2', // white crest
-  e: '#1d1420', // eye
+  o: '#22171a', // outline (near-black brown, so the black patch still reads)
+  k: '#433839', // black fur, a soft charcoal
+  K: '#2f2729', // black fur shadow
+  n: '#665a5b', // black fur sheen
+  r: '#e08a43', // ginger
+  R: '#b8642c', // ginger shadow, and the ears
+  y: '#f3ae6e', // ginger highlight
+  w: '#fffaf2', // white
+  W: '#e3d9cd', // white shadow
+  L: '#f4efe8', // whiskers
+  e: '#120c0e', // eye
   h: '#ffffff', // eye shine
   p: '#f19aa9', // pink (nose, feet, inner ear)
   b: '#f7b9c6', // blush
@@ -85,9 +86,6 @@ export function latteGrid(p: Pose): Grid {
   const cxH = 25.5;
   const cyH = 15.5 + p.dip + (p.flat ? 1 : 0) - p.stretch * 0.5;
   const headTop = Math.ceil(cyH - ryH - 0.5);
-  // apricot face and chest meet the grey coat on a slant: grey sweeps over
-  // the crown behind the ear, apricot reaches back along the chest
-  const seam = (y: number) => 21.5 - (y - 12) * 0.55;
 
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -120,40 +118,59 @@ export function latteGrid(p: Pose): Grid {
     for (const x of [...front, ...back]) region[25][x] = 'feet';
   }
 
-  // ---- colour ----
+  // ---- colour: calico patches ----
   const filled = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && !!region[y][x];
+  // Patch edges wander a little, like real fur: a ginger rump, a round black
+  // saddle over the back, and white everywhere else (collar, sides, belly).
+  const rumpEdge = (y: number) => 7.5 + Math.sin(y * 0.8 + 0.5) * 1.2;
+  const bellyLine = (x: number) => 19.5 + Math.sin(x * 0.7) * 0.9;
+  const inSaddle = (x: number, y: number) => {
+    const dx = (x + 0.5 - 12.5) / 6;
+    const dy = (y + 0.5 - cyB + ryB * 0.45) / (ryB * 0.75);
+    return dx * dx + dy * dy <= 1 + 0.18 * Math.sin(x * 1.3 + y * 0.7);
+  };
+  const patchAt = (x: number, y: number): 'k' | 'r' | 'w' => {
+    if (x >= 5 && y >= bellyLine(x)) return 'w';
+    if (inSaddle(x, y)) return 'k';
+    if (x < rumpEdge(y)) return 'r';
+    return 'w';
+  };
+  const SHADES = { k: ['n', 'k', 'K'], r: ['y', 'r', 'R'], w: ['w', 'w', 'W'] } as const; // light, base, shadow
+  // the front edge of the face on each row, for the blaze
+  const faceFront = region.map((row) => row.reduce((m, r, x) => (r === 'head' ? x : m), -1));
+  const lowBody = cyB + ryB * 0.35;
+  // white fur with a light, sparse shadow low down
+  const whiteFur = (x: number, y: number): Px => (y >= 22 && (x + 2 * y) % 3 === 0 ? 'W' : 'w');
+
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const r = region[y][x];
       if (!r) continue;
-      let c: Px = 'g';
-      const apricot = x >= seam(y);
-      const edge = Math.abs(x - seam(y)) < 1;
-      if (r === 'fringe') {
-        c = (x + y) % 2 === 0 ? 'L' : 'l';
-      } else if (r === 'feet') {
+      let c: Px;
+      if (r === 'feet') {
         c = 'p';
-      } else if (apricot && r !== 'body') {
-        c = 'a';
-        if (y >= cyH + 1 && x >= 26) c = 'c'; // cream muzzle and cheek
-        if (r === 'chest' && x >= 21) c = y >= 23 ? ((x + y) % 2 === 0 ? 'l' : 'c') : 'c';
-        if (y <= headTop + 1 && x >= 22 && x <= 29) c = 'w'; // white crest
-        if (y === headTop + 2 && x >= 23 && x <= 28 && (x + y) % 2 === 0) c = 'w';
-        if (y === headTop + 2 && x >= 29 && x <= 30) c = 'w';
-        if (edge && (x + y) % 2 === 0) c = 'A';
+      } else if (r === 'head') {
+        // white blaze from the crown down the front of the face, white muzzle,
+        // and white where the back of the head meets the collar
+        const blaze = x >= faceFront[y] - 1 || (y === headTop && x >= 26) || (y >= cyH + 1 && x >= 26);
+        const collar = x < 21 && y >= cyH - 1;
+        if (blaze || collar) c = whiteFur(x, y);
+        else if (y >= cyH + 1.5 + Math.max(0, 25 - x) * 0.35) c = whiteFur(x, y); // white throat, sloping back
+        else c = !filled(x, y - 1) ? 'y' : 'r';
+      } else if (r === 'chest') {
+        c = whiteFur(x, y);
       } else {
-        // lilac-grey coat with long streaky strands and a shaded belly
-        c = 'g';
-        const low = y >= cyB + ryB * 0.3;
-        if (low) c = 'G';
-        if (y >= 22) c = (x + y) % 2 === 0 ? 'G' : 'd';
-        const strand = (x + y) % 5;
-        const dash = (x - y + 40) % 6 < 3;
-        if (strand === 0 && dash && y < 22) c = low ? 'g' : 'l';
-        if (strand === 2 && dash && y < 22 && !low) c = 'G';
-        if (!filled(x, y - 1)) c = 'l';
-        else if (!filled(x, y - 2) && x % 2 === 0) c = 'L';
-        if (apricot) c = edge ? ((x + y) % 2 === 0 ? 'A' : c) : y > 17 ? 'a' : (x + y) % 2 === 0 ? 'a' : 'A';
+        // the back and its long fringe take the colour of the patch above
+        const patch = patchAt(x, r === 'fringe' ? 23 : y);
+        const [light, base, shadow] = SHADES[patch];
+        if (patch === 'w' && (r === 'fringe' || y >= 22)) c = whiteFur(x, y);
+        else if (r === 'fringe' || y >= 22) c = (x + y) % 2 === 0 ? base : shadow;
+        else if (!filled(x, y - 1)) c = light;
+        else if (patch !== 'w' && y >= lowBody) c = shadow;
+        else c = base;
+        // a few glossy strands in the long coat
+        const strand = (x + y) % 5 === 0 && (x - y + 40) % 6 < 3;
+        if (r === 'body' && strand && y < lowBody && filled(x, y - 1)) c = light;
       }
       grid[y][x] = c;
     }
@@ -173,8 +190,8 @@ export function latteGrid(p: Pose): Grid {
   const ex = 18;
   const ey = headTop - 2 + (p.earDown ? 2 : 0);
   const ear = p.earDown
-    ? ['.oooo.', 'oGGGpo', 'oGppGo', '.oooo.']
-    : ['.ooo..', 'oGGGo.', 'oGppGo', 'oGGpGo', '.ooGo.'];
+    ? ['.oooo.', 'oRRRpo', 'oRppRo', '.oooo.']
+    : ['.ooo..', 'oRRRo.', 'oRppRo', 'oRRpRo', '.ooRo.'];
   ear.forEach((row, j) => {
     [...row].forEach((ch, i) => {
       const x = ex + i;
@@ -200,9 +217,9 @@ export function latteGrid(p: Pose): Grid {
       set(eyeX + 1, eyeY + 2, 'e');
       break;
     case 'sad':
-      set(eyeX - 1, eyeY - 1, 'A'); // brow tilted up at the back
-      set(eyeX, eyeY, 'A');
-      set(eyeX + 1, eyeY, 'A');
+      set(eyeX - 1, eyeY - 1, 'R'); // brow tilted up at the back
+      set(eyeX, eyeY, 'R');
+      set(eyeX + 1, eyeY, 'R');
       set(eyeX, eyeY + 1, 'h');
       set(eyeX + 1, eyeY + 1, 'e');
       set(eyeX, eyeY + 2, 'e');
@@ -235,7 +252,7 @@ export function latteGrid(p: Pose): Grid {
     }
   }
   set(noseX, noseY, 'p');
-  set(noseX, noseY - 1, 'c');
+  set(noseX, noseY - 1, 'w');
   if (p.blush) {
     set(eyeX + 1, eyeY + 4, 'b');
     set(eyeX + 2, eyeY + 4, 'b');

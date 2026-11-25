@@ -6,6 +6,7 @@ import { drawFire, drawRadioNotes, drawStudyLight, paintHall, paintStudy } from 
 import { createSong } from './music';
 import { BANG, HEART, LETTUCE, NOTE, PLAYER_W, latteSprite, playerSprite, type Facing } from './sprites';
 import { PEN, ROOMS, TOTAL_THINGS, contains, overlaps, type RoomId, type ThingId } from './world';
+import './room.css';
 
 // ---------------------------------------------------------------------------
 // Jordan's Room: a little top-down RPG room to explore. Walk around the study
@@ -44,6 +45,15 @@ interface Particle {
 // The player's footprint: the bottom 4 rows of the 14×21 sprite, a little narrower.
 const feet = (x: number, y: number) => ({ x: x + 3, y: y + 17, w: 8, h: 4 });
 
+// Everything that counts towards "FOUND N / 13".
+const COUNTED: ThingId[] = Object.values(ROOMS).flatMap((r) => r.things.filter((t) => t.counts).map((t) => t.id));
+
+/** Things found on earlier visits. A garbled save keeps only real, counted things, once each. */
+function loadFound(): ThingId[] {
+  const saved = load<unknown>('room:found', []);
+  return Array.isArray(saved) ? COUNTED.filter((id) => saved.includes(id)) : [];
+}
+
 export default function Room() {
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,7 +61,7 @@ export default function Room() {
   // --- React state (drives the HUD and dialogue) ---
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [roomId, setRoomId] = useState<RoomId>('study');
-  const [found, setFound] = useState<ThingId[]>(() => load<ThingId[]>('room:found', []));
+  const [found, setFound] = useState<ThingId[]>(loadFound);
   const [hasLettuce, setHasLettuce] = useState(false);
   const [radioOn, setRadioOn] = useState(false);
   const [touchUI] = useState(
@@ -66,7 +76,7 @@ export default function Room() {
     facing: 'down' as Facing,
     walkT: 0,
     moving: false,
-    lit: load<boolean>('room:lit', false),
+    lit: load<unknown>('room:lit', false) === true,
     plantFull: true,
     hasLettuce: false,
     radioOn: false,
@@ -321,7 +331,7 @@ export default function Room() {
       lines: [
         "Welcome to Jordan's room!",
         touchUI
-          ? 'Walk with the pad below. Tap A when you face something to look at it.'
+          ? 'Walk with the arrow pad. Tap A when you face something to look at it.'
           : 'Walk with the arrow keys or WASD. Press Z, Enter or Space to look at things.',
         `There are ${TOTAL_THINGS} things to discover. Have a look around.`,
       ],
@@ -351,8 +361,9 @@ export default function Room() {
         return;
       }
       if (['Enter', ' ', 'z', 'Z'].includes(e.key)) {
-        // let buttons keep their own Enter/Space behaviour
-        if (target && target.tagName === 'BUTTON' && !dialogOpen.current) return;
+        // A focused button or link (a dialogue choice, the back button) keeps
+        // its own Enter/Space; blocking it here left Tab + Enter dead.
+        if ((e.key === 'Enter' || e.key === ' ') && target?.closest('button, a')) return;
         e.preventDefault();
         if (!e.repeat) interact();
       }
@@ -375,10 +386,19 @@ export default function Room() {
     };
   }, [interact]);
 
-  // Stop the music when leaving the page.
+  // Pause the radio while the tab is hidden (a background tab's timers are
+  // throttled, which would garble it), and stop it when leaving the page.
   useEffect(() => {
     const s = song.current;
-    return () => s.stop();
+    const onVisibility = () => {
+      if (document.hidden) s.stop();
+      else if (game.current.radioOn) s.start();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      s.stop();
+    };
   }, []);
 
   // -------------------------------------------------------------------------
@@ -573,8 +593,8 @@ export default function Room() {
       wide
       subtitle="A cosy pixel room to explore. Look at things to find your way around the portfolio."
     >
-      {/* Sized so the whole screen fits in the window on a laptop. */}
-      <div className="mx-auto" style={{ maxWidth: 'min(960px, calc((100svh - 260px) * 5 / 3))', minWidth: 'min(100%, 300px)' }}>
+      {/* Sized so the whole screen fits in the window (see room.css). */}
+      <div className={`room-wrap ${touchUI ? 'room-wrap--touch' : ''}`}>
         {/* HUD */}
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm sm:text-base">
           <span className="px-label">{room.name}</span>
@@ -592,55 +612,60 @@ export default function Room() {
           </span>
         </div>
 
-        {/* Screen */}
-        <div className="px-box relative overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            width={VIEW_W}
-            height={VIEW_H}
-            className="px-canvas block w-full"
-            style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
-            role="img"
-            aria-label={`${room.name} of Jordan's room. Use the arrow keys to walk and Enter to look at things.`}
-            onClick={() => interact()}
-          />
-          {dialog && (
-            <div className="absolute inset-x-2 bottom-2 sm:inset-x-6 sm:bottom-4">
-              <DialogueBox
-                lines={dialog.lines}
-                speaker={dialog.speaker}
-                choices={dialog.choices}
-                onDone={closeDialog}
-                className="text-sm sm:text-lg"
-              />
+        <div className="room-play">
+          {/* Screen. The dialogue's size follows the screen's width (a
+              container query), not the window's, so it fits a small screen. */}
+          <div className="room-screen @container px-box relative overflow-hidden">
+            <canvas
+              ref={canvasRef}
+              width={VIEW_W}
+              height={VIEW_H}
+              className="px-canvas block w-full"
+              style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}` }}
+              role="img"
+              aria-label={`${room.name} of Jordan's room. Use the arrow keys to walk and Enter to look at things.`}
+              onClick={() => interact()}
+            />
+            {dialog && (
+              <div className="absolute inset-x-2 bottom-2 @lg:inset-x-6 @lg:bottom-4">
+                <DialogueBox
+                  lines={dialog.lines}
+                  speaker={dialog.speaker}
+                  choices={dialog.choices}
+                  onDone={closeDialog}
+                  className="text-sm @lg:text-lg"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Controls: below the screen, or either side of it on a phone held sideways */}
+          {touchUI && (
+            <div className="room-controls">
+              <div className="room-pad grid grid-cols-3 grid-rows-3 gap-1">
+                <span />
+                {padButton('up', '▲', '')}
+                <span />
+                {padButton('left', '◀', '')}
+                <span />
+                {padButton('right', '▶', '')}
+                <span />
+                {padButton('down', '▼', '')}
+                <span />
+              </div>
+              <button
+                type="button"
+                aria-label="Look"
+                className="room-look px-btn px-btn--icon h-16 w-16 rounded-full text-2xl"
+                onClick={() => interact()}
+              >
+                A
+              </button>
             </div>
           )}
         </div>
 
-        {/* Controls */}
-        {touchUI ? (
-          <div className="mt-5 flex items-center justify-between px-2">
-            <div className="grid grid-cols-3 grid-rows-3 gap-1">
-              <span />
-              {padButton('up', '▲', '')}
-              <span />
-              {padButton('left', '◀', '')}
-              <span />
-              {padButton('right', '▶', '')}
-              <span />
-              {padButton('down', '▼', '')}
-              <span />
-            </div>
-            <button
-              type="button"
-              aria-label="Look"
-              className="px-btn px-btn--icon h-16 w-16 rounded-full text-2xl"
-              onClick={() => interact()}
-            >
-              A
-            </button>
-          </div>
-        ) : (
+        {!touchUI && (
           <p className="mt-4 text-center text-sm text-[var(--px-dim)]">
             Arrow keys / WASD to walk · Z, Enter or Space to look · doors are at the edges of each room
           </p>

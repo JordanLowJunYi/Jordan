@@ -70,8 +70,9 @@ export const useGPS = (): UseGPSReturn => {
     setGpsState(prev => ({ ...prev, watchId }));
   }, []);
 
+  // `!== null`: 0 is a valid watch id, and a falsy check would leave it running
   const stopGPS = useCallback(() => {
-    if (gpsState.watchId) {
+    if (gpsState.watchId !== null) {
       navigator.geolocation.clearWatch(gpsState.watchId);
     }
     setGpsState(prev => ({
@@ -83,7 +84,7 @@ export const useGPS = (): UseGPSReturn => {
 
   useEffect(() => {
     return () => {
-      if (gpsState.watchId) {
+      if (gpsState.watchId !== null) {
         navigator.geolocation.clearWatch(gpsState.watchId);
       }
     };

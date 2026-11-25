@@ -1,10 +1,8 @@
 import { useLayoutEffect } from 'react';
 import type { RefObject } from 'react';
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { prefersReducedMotion } from './motion';
-
-gsap.registerPlugin(ScrollTrigger);
+import { holdScrollTrigger, ScrollTrigger } from './scrollTrigger';
 
 interface RevealOptions {
   y?: number;         // distance travelled on the way in
@@ -30,6 +28,7 @@ export function useReveal(
     const scope = scopeRef.current;
     if (!scope || prefersReducedMotion()) return;
 
+    const release = holdScrollTrigger();
     const ctx = gsap.context(() => {
       const els = gsap.utils.toArray<HTMLElement>(selector);
       if (!els.length) return;
@@ -47,6 +46,9 @@ export function useReveal(
       });
     }, scope);
 
-    return () => ctx.revert();
+    return () => {
+      ctx.revert();
+      release();
+    };
   }, [scopeRef, selector, y, stagger, duration, start]);
 }

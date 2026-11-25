@@ -67,7 +67,8 @@
   gap: 0.75rem;
   margin-bottom: 14px;
 }
-.pn-octave { display: flex; align-items: center; gap: 0.6rem; }
+/* wraps only when the text is zoomed right up on a phone (▶ ran off screen) */
+.pn-octave { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
 .pn-octave__range {
   min-width: 5.5rem;
   text-align: center;
@@ -338,7 +339,8 @@
   color: var(--px-ink);
   animation: pn-pop 0.2s steps(3) 1;
 }
-.pn-strip__list .pn-strip__empty { border-color: transparent; color: var(--px-faint); }
+/* the hint may wrap instead of sliding under the fade on the left */
+.pn-strip__list .pn-strip__empty { flex: 0 1 auto; min-width: 0; border-color: transparent; color: var(--px-faint); }
 @keyframes pn-pop {
   0% { transform: scale(0.6); }
   60% { transform: scale(1.15); }

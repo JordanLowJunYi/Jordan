@@ -74,20 +74,25 @@ const TestimonialPanel: React.FC<{ item: Testimonial | null; onClose: () => void
   }, [item, shown]);
 
   // While open: lock scroll, hide the floating menu button, close on Escape, and
-  // move focus in and back out again.
+  // move focus in and back out again. The page behind (#root; the panel is
+  // portalled outside it) is made inert, so Tab and Shift+Tab stay in the panel
+  // instead of wandering onto links hidden behind the backdrop.
   useEffect(() => {
     if (!shown || !item) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    const page = document.getElementById('root');
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.body.dataset.overlayOpen = 'true';
+    if (page) page.inert = true;
     document.addEventListener('keydown', onKey);
     closeRef.current?.focus();
     return () => {
       document.body.style.overflow = prevOverflow;
       delete document.body.dataset.overlayOpen;
+      if (page) page.inert = false;
       document.removeEventListener('keydown', onKey);
       returnFocusRef.current?.focus?.();
     };

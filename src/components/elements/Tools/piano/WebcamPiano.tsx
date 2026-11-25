@@ -81,11 +81,12 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
     sfx.bad();
   };
 
-  const start = async () => {
+  // `quiet`: an automatic restart (coming back to the tab) makes no blips
+  const start = async ({ quiet = false }: { quiet?: boolean } = {}) => {
     stop();
     setProblem(null);
     setDetail(null);
-    sfx.select();
+    if (!quiet) sfx.select();
     if (!navigator.mediaDevices?.getUserMedia) {
       fail('insecure');
       return;
@@ -143,6 +144,9 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
       if (!video.videoWidth) {
         await new Promise<void>((done) => video.addEventListener('loadedmetadata', () => done(), { once: true }));
       }
+      // stopped (or left the page) while the video was starting: don't carry on
+      // and report "running" with the camera already off
+      if (!live) return;
       // The hand model sizes its input from the <video> element's width and
       // height attributes (not videoWidth), which default to 0, so it never
       // found a hand. The 2025 version set them too (video.width = 800).
@@ -211,6 +215,9 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
                 });
               });
             } catch (err) {
+              // a frame still in flight when the camera stopped can fail as the
+              // model is freed; that isn't a tracking problem
+              if (!live) return;
               console.warn('[piano] hand tracking frame failed', err);
               failures += 1;
               if (failures >= 30) {
@@ -297,7 +304,7 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
         detectorRef.current = detector;
       }
       setPhase('running');
-      sfx.good();
+      if (!quiet) sfx.good();
     } catch (err) {
       if (!live) return;
       session.stop();
@@ -310,6 +317,26 @@ export default function WebcamPiano({ names, onExit }: { names: boolean; onExit:
   useEffect(() => {
     startRef.current = start;
   });
+
+  // A background tab gets the camera fully off (the light too, not just a
+  // paused picture), and it comes back on by itself when the tab is shown
+  // again, if it was on when the tab was hidden.
+  const resumeRef = useRef(false);
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (!sessionRef.current) return;
+        resumeRef.current = true;
+        stop();
+        setPhase('off');
+      } else if (resumeRef.current) {
+        resumeRef.current = false;
+        void startRef.current({ quiet: true });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [stop]);
   const problemText = problem ? PROBLEM_TEXT[problem] : null;
   const problemLines = useMemo(
     () => (problemText ? [...problemText.lines, ...(detail ? [`Error: ${detail}`] : [])] : []),

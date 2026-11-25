@@ -69,12 +69,13 @@ export const dijkstra = (graph: Graph, startId: string, endId: string): Dijkstra
     });
   }
 
-  // Reconstruct path
+  // Reconstruct path. `?? null`: an end node missing from the graph (an
+  // imported file's stale graph) used to give `undefined` here and loop forever.
   const path: string[] = [];
   let current: string | null = endId;
   while (current !== null) {
     path.unshift(current);
-    current = previous[current];
+    current = previous[current] ?? null;
   }
 
   return {
@@ -83,73 +84,63 @@ export const dijkstra = (graph: Graph, startId: string, endId: string): Dijkstra
   };
 };
 
-// Find K shortest paths using Yen's algorithm (simplified version)
+// Find the K shortest loop-free paths with Yen's algorithm. (The old
+// shortcut removed one edge at a time and only ever re-found the routes it
+// already had, so on A-B-D / A-C-D / A-D it never offered the direct A-D.)
 export const findKShortestPaths = (
-  graph: Graph, 
-  nodes: { [id: string]: MapNode }, 
-  startId: string, 
-  endId: string, 
+  graph: Graph,
+  nodes: { [id: string]: MapNode },
+  startId: string,
+  endId: string,
   k: number = 3
 ): PathResult[] => {
-  const paths: PathResult[] = [];
-  
-  // First shortest path
-  const firstPath = dijkstra(graph, startId, endId);
-  if (firstPath.path.length === 0) return [];
-  
-  paths.push({
-    path: firstPath.path,
-    distance: firstPath.distance,
-    nodes: firstPath.path.map(id => nodes[id])
-  });
+  const first = dijkstra(graph, startId, endId);
+  if (first.path.length === 0) return [];
 
-  // Find alternative paths by temporarily removing edges
+  const key = (path: string[]) => path.join('\u0000');
+  // cheapest edge between two neighbours (Dijkstra used the cheapest of any parallel edges)
+  const weight = (a: string, b: string) =>
+    Math.min(...(graph[a] ?? []).filter(e => e.node === b).map(e => e.weight));
+
+  const found: DijkstraResult[] = [first];
+  const candidates: DijkstraResult[] = [];
+
   for (let i = 1; i < k; i++) {
-    let bestAltPath: DijkstraResult | null = null;
-    let bestAltDistance = Infinity;
+    const prev = found[i - 1].path;
+    for (let j = 0; j < prev.length - 1; j++) {
+      const spurNode = prev[j];
+      const root = prev.slice(0, j + 1);
+      const rootKey = key(root);
 
-    // Try removing each edge from the previous shortest paths
-    for (const existingPath of paths) {
-      for (let j = 0; j < existingPath.path.length - 1; j++) {
-        const modifiedGraph: Graph = JSON.parse(JSON.stringify(graph));
-        
-        // Remove edge
-        const fromNode = existingPath.path[j];
-        const toNode = existingPath.path[j + 1];
-        modifiedGraph[fromNode] = modifiedGraph[fromNode].filter(
-          edge => edge.node !== toNode
-        );
-        modifiedGraph[toNode] = modifiedGraph[toNode].filter(
-          edge => edge.node !== fromNode
-        );
-
-        // Find alternative path
-        const altPath = dijkstra(modifiedGraph, startId, endId);
-        if (altPath.path.length > 0 && altPath.distance < bestAltDistance) {
-          // Check if this path is different from existing paths
-          const pathStr = altPath.path.join('-');
-          const isDifferent = !paths.some(p => p.path.join('-') === pathStr);
-          
-          if (isDifferent) {
-            bestAltPath = altPath;
-            bestAltDistance = altPath.distance;
-          }
+      const g: Graph = {};
+      Object.keys(graph).forEach(id => { g[id] = graph[id].slice(); });
+      // leave out the next step of every found route that shares this root...
+      for (const p of found) {
+        if (p.path.length > j + 1 && key(p.path.slice(0, j + 1)) === rootKey) {
+          const a = p.path[j];
+          const b = p.path[j + 1];
+          g[a] = (g[a] ?? []).filter(e => e.node !== b);
+          g[b] = (g[b] ?? []).filter(e => e.node !== a);
         }
       }
-    }
+      // ...and the root's own nodes, so the detour can't loop back through them
+      root.slice(0, -1).forEach(id => { delete g[id]; });
 
-    if (bestAltPath) {
-      paths.push({
-        path: bestAltPath.path,
-        distance: bestAltPath.distance,
-        nodes: bestAltPath.path.map(id => nodes[id])
-      });
-    } else {
-      break; // No more alternative paths found
+      const spur = dijkstra(g, spurNode, endId);
+      if (spur.path.length === 0) continue;
+      let rootCost = 0;
+      for (let m = 0; m < root.length - 1; m++) rootCost += weight(root[m], root[m + 1]);
+      const path = [...root.slice(0, -1), ...spur.path];
+      const pk = key(path);
+      if (found.some(p => key(p.path) === pk) || candidates.some(p => key(p.path) === pk)) continue;
+      candidates.push({ path, distance: rootCost + spur.distance });
     }
+    if (candidates.length === 0) break;
+    candidates.sort((a, b) => a.distance - b.distance);
+    found.push(candidates.shift()!);
   }
 
-  return paths;
+  return found.map(p => ({ path: p.path, distance: p.distance, nodes: p.path.map(id => nodes[id]) }));
 };
 
 // Format distance for display

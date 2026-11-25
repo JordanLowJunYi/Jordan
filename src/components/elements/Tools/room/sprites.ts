@@ -143,36 +143,38 @@ export function playerSprite(facing: Facing, frame: 0 | 1 | 2): HTMLCanvasElemen
 
 // ---------------------------------------------------------------------------
 // Latte: a small version (24×14) of the sprite in the Latte game
-// (latte/sprite.ts), same colours: lilac-grey long coat with pale tips,
-// apricot-and-cream face, white crest, pink ear and feet. Faces right.
+// (latte/sprite.ts), same calico colours: ginger head with a white blaze and
+// muzzle, black saddle, ginger rump, white collar and belly, pink ears and
+// feet. Faces right.
 // ---------------------------------------------------------------------------
 export const LATTE_PALETTE: Palette = {
-  o: '#3a2633', // outline
-  g: '#a3959c', // lilac-grey coat
-  G: '#7d7079', // coat shadow
-  l: '#d3c8c6', // pale fur tips
-  a: '#eab184', // apricot
-  A: '#c88a5e', // dark apricot
-  c: '#f7dfc4', // cream muzzle
-  w: '#fffaf2', // white crest
-  e: '#1d1420', // eye
+  o: '#22171a', // outline
+  k: '#433839', // black fur
+  K: '#2f2729', // black fur shadow
+  n: '#665a5b', // black fur sheen
+  r: '#e08a43', // ginger
+  R: '#b8642c', // ginger shadow, ears
+  y: '#f3ae6e', // ginger highlight
+  w: '#fffaf2', // white
+  W: '#e3d9cd', // white shadow
+  e: '#120c0e', // eye
   p: '#f19aa9', // pink ear, nose, feet
 };
 
 const LATTE_STAND = [
   '........................',
   '.......ooooo.o..........',
-  '....oooggglgoAooooo.....',
-  '...ogglgglggApawwwaoo...',
-  '..ogggggggglpAwwwaaaao..',
-  '.olgggglggggaaaaaaaaao..',
-  'ogglglggggggaaaaaaeeaao.',
-  'oggggggglgggaaaaaaeaaao.',
-  'oggglgggggglaaaaaccccp..',
-  '.oggggggggggaaaaacccAo..',
-  '..oGGGGGGGGGGAAAAccco...',
-  '...oGGGGGGGGGGGAAcco....',
-  '....ooGGGGGGGoooooo.....',
+  '....ooonkkwwoRooooo.....',
+  '...oynkknkwwRpryywwoo...',
+  '..oyrkkkkkwwpRrrrrwwwo..',
+  '.oyrrkknkkwwrrrrrrrwwo..',
+  'orrrkkkkKwwwrrrrrreewwo.',
+  'orrRwKKKwwwwrrrrrrerwwo.',
+  'orRwwwwwwwwwrrrrwwwwwp..',
+  '.oRwwwwwwwwwrrwwwwwwWo..',
+  '..oRWwwWwwWwwWwwWwwWo...',
+  '...oRWwWWwWWwWWwWWWo....',
+  '....ooWWWWWWWoooooo.....',
   '.....ppoooooo..pp.......',
 ];
 // mid-step: front and back feet swap

@@ -6,38 +6,29 @@ import type { Testimonial } from './Highlights/TestimonialPanel';
 import { CarouselToggle } from './CarouselToggle';
 import { useReveal } from '../../../lib/useReveal';
 import { prefersReducedMotion } from '../../../lib/motion';
+import { useMediaQuery } from '../../../lib/useMediaQuery';
+import { useSlickFocusGuard } from '../../../lib/useSlickFocusGuard';
 import type { Section, TestimonialQuote } from '../../../content/siteContent';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 
 type TestimonialsSection = Extract<Section, { kind: 'testimonials' }>;
 
-// Props react-slick injects onto each slide via cloneElement. Forwarded onto the
-// root so slick's sizing applies, and aria-hidden is mirrored onto the button's
-// tabIndex so focus never lands on an off-screen or cloned slide.
-type SlideInjectedProps = {
-  className?: string;
-  style?: React.CSSProperties;
-  'aria-hidden'?: boolean | 'true' | 'false';
-  'data-index'?: number;
-};
-
+// react-slick wraps each slide in divs of its own and passes this element only a
+// width style, which is forwarded. Its aria-hidden for off-screen and cloned
+// slides lands on those wrappers, so useSlickFocusGuard keeps hidden slides out
+// of the Tab order.
 function QuoteSlide({
   item,
   onOpenLetter,
-  ...slide
+  style,
 }: {
   item: TestimonialQuote;
   onOpenLetter: () => void;
-} & SlideInjectedProps) {
-  const hidden = slide['aria-hidden'] === true || slide['aria-hidden'] === 'true';
+  style?: React.CSSProperties;
+}) {
   return (
-    <div
-      className={`${slide.className ?? ''} h-full px-3 pb-2`}
-      style={slide.style}
-      data-index={slide['data-index']}
-      aria-hidden={hidden || undefined}
-    >
+    <div className="h-full px-3 pb-2" style={style}>
       <figure className="flex h-full flex-col rounded-3xl border border-emerald-400/25 bg-gradient-to-br from-emerald-950/50 via-gray-900/60 to-teal-950/40 p-7 sm:p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur-md">
         <Quote className="h-8 w-8 shrink-0 text-emerald-300/70" aria-hidden="true" />
         <blockquote className="mt-4 flex-1 text-lg sm:text-xl leading-relaxed text-gray-100">
@@ -51,7 +42,6 @@ function QuoteSlide({
           <button
             type="button"
             onClick={onOpenLetter}
-            tabIndex={hidden ? -1 : 0}
             aria-haspopup="dialog"
             className="mt-3 inline-flex items-center gap-1.5 text-sm text-emerald-300 hover:text-emerald-200 underline underline-offset-4 decoration-emerald-400/40 hover:decoration-emerald-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/70 rounded"
           >
@@ -92,10 +82,14 @@ const Testimonials: React.FC<{ section: TestimonialsSection }> = ({ section }) =
   useReveal(scopeRef, '[data-reveal]', { y: 36, start: 'top 85%' });
 
   const sliderRef = useRef<Slider>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  useSlickFocusGuard(carouselRef);
   const count = section.quotes.length;
   const autoplayEnabled = !prefersReducedMotion() && count > 1;
   const [playing, setPlaying] = useState(autoplayEnabled);
   const [openLetter, setOpenLetter] = useState<Testimonial | null>(null);
+  // Two letters side by side on wide screens, one at a time below 1024px.
+  const isWide = useMediaQuery('(min-width: 1025px)');
 
   const open = (letter: Testimonial) => {
     sliderRef.current?.slickPause();
@@ -115,7 +109,7 @@ const Testimonials: React.FC<{ section: TestimonialsSection }> = ({ section }) =
     dots: true,
     infinite: count > 1,
     speed: 700,
-    slidesToShow: Math.min(2, count),
+    slidesToShow: Math.min(isWide ? 2 : 1, count),
     slidesToScroll: 1,
     autoplay: autoplayEnabled,
     autoplaySpeed: 6500,
@@ -124,7 +118,6 @@ const Testimonials: React.FC<{ section: TestimonialsSection }> = ({ section }) =
     arrows: count > 1,
     prevArrow: <Arrow direction="prev" />,
     nextArrow: <Arrow direction="next" />,
-    responsive: [{ breakpoint: 1024, settings: { slidesToShow: 1 } }],
   };
 
   return (
@@ -151,7 +144,7 @@ const Testimonials: React.FC<{ section: TestimonialsSection }> = ({ section }) =
         <div className="text-center mb-12">
           <h1
             data-reveal
-            className="pb-3 text-5xl font-bold bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent"
+            className="pb-3 text-5xl font-bold break-words bg-gradient-to-r from-emerald-300 via-teal-300 to-cyan-300 bg-clip-text text-transparent"
           >
             {section.title}
           </h1>
@@ -163,6 +156,7 @@ const Testimonials: React.FC<{ section: TestimonialsSection }> = ({ section }) =
         </div>
 
         <div
+          ref={carouselRef}
           data-reveal
           role="region"
           aria-roledescription="carousel"
@@ -177,6 +171,8 @@ const Testimonials: React.FC<{ section: TestimonialsSection }> = ({ section }) =
             .testimonial-carousel .slick-dots li button:before { font-size: 11px; color: #34d399; opacity: 0.45; }
             .testimonial-carousel .slick-dots li.slick-active button:before { color: #34d399; opacity: 1; }
             .testimonial-carousel .slick-dots li button:hover:before { opacity: 0.75; }
+            .testimonial-carousel .slick-dots li button:focus-visible { outline: 2px solid #34d399; outline-offset: -2px; border-radius: 9999px; }
+            .testimonial-carousel .slick-dots li button:focus-visible:before { opacity: 1; }
           `}</style>
           <Slider ref={sliderRef} {...settings}>
             {section.quotes.map((item, i) => (

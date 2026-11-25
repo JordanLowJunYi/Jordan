@@ -48,6 +48,11 @@
 .vis-fs {
   margin-left: auto;
 }
+/* Three across; fewer per row only when the text is zoomed so far that a
+   word like DEMO wouldn't fit its button any more. */
+.vis-sources {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 5rem), 1fr));
+}
 .vis-source {
   min-width: 0;
   padding-left: 1.2rem;
@@ -99,5 +104,12 @@
     padding-left: 1rem;
     padding-right: 0.55rem;
     letter-spacing: 0.03em;
+  }
+}
+/* 320px phones: the three style buttons ran 19px past the panel's edge, over
+   its border. Without their small icons they fit on one row again. */
+@media (max-width: 359px) {
+  .vis-toolbar .vis-mode > svg {
+    display: none;
   }
 }

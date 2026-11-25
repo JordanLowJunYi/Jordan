@@ -70,6 +70,13 @@ export function loadLatte(now = Date.now()): { state: LatteState; firstVisit: bo
   if (!valid(raw)) return { state: fresh(now), firstVisit: true, awayMs: 0 };
   const state: LatteState = {
     ...raw,
+    // keep a hand-edited save's stats on the 0-100 meters from the first frame
+    stats: {
+      fullness: clamp(raw.stats.fullness),
+      happiness: clamp(raw.stats.happiness),
+      energy: clamp(raw.stats.energy),
+      cleanliness: clamp(raw.stats.cleanliness),
+    },
     treats: Array.isArray(raw.treats) ? raw.treats.filter((t) => Number.isFinite(t)) : [],
     tummyUntil: Number.isFinite(raw.tummyUntil) ? raw.tummyUntil : 0,
     asleep: !!raw.asleep,

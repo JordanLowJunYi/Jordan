@@ -360,7 +360,7 @@ export default function WordSearch() {
       <div className={`mx-auto w-full ${still ? 'ws--still' : ''}`}>
         {/* settings: always open on wider screens, folded behind one button on phones */}
         <div className="mb-6">
-          <div className="flex gap-3 sm:hidden">
+          <div className="flex flex-wrap gap-3 sm:hidden">
             <button
               type="button"
               className="px-btn px-btn--small flex-1"
@@ -442,7 +442,7 @@ export default function WordSearch() {
             </div>
 
             {/* board */}
-            <div className="relative">
+            <div className="ws-stage relative">
               <div className="ws-frame px-box">
                 <div
                   className="ws-board"

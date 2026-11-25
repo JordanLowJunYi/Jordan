@@ -4,6 +4,9 @@
   right: 0;
   width: 500px;
   height: 100vh;
+  /* The visible height on phones, whose browser bars would otherwise cover
+     the bottom of the menu. */
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: 20px;
@@ -14,6 +17,9 @@
   /* transform/opacity are owned by GSAP (Menu.tsx); a CSS transition on the same
      properties would fight it frame-by-frame, so it is intentionally omitted here. */
   pointer-events: auto;
+  /* The panel stays put; its content scrolls inside it (Menu.tsx) when it is
+     taller than the screen, e.g. a phone on its side or large text. */
+  overflow: hidden;
 }
 
 .page__style {

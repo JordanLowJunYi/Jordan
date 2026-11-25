@@ -785,13 +785,13 @@ export default function Latte() {
         <div className="flex min-w-0 flex-col gap-6">
           <section className="px-box p-4" aria-label="Latte's needs">
             <h2 className="px-label mb-3 text-[var(--px-ink)]">Needs</h2>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-1">
+            <div className="latte-grid2 latte-needs grid gap-x-4 gap-y-3">
               {STATS.map((s) => {
                 const v = Math.round(st.stats[s.key]);
                 const low = st.stats[s.key] < (s.key === 'energy' ? 20 : LOW);
                 return (
                   <div key={s.key}>
-                    <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-2">
                       <span className="px-label">{s.label}</span>
                       <span className={`text-sm ${low ? 'text-[var(--px-red)]' : ''}`}>
                         {low && <span aria-hidden="true">! </span>}
@@ -829,7 +829,7 @@ export default function Latte() {
                 }}
               >
                 <h2 className="px-label mb-3 text-[var(--px-ink)]">What should Latte eat?</h2>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="latte-grid2 grid gap-3">
                   {FOODS.map((f, i) => (
                     <button
                       key={f.id}
@@ -860,7 +860,7 @@ export default function Latte() {
             ) : (
               <>
                 <h2 className="px-label mb-3 text-[var(--px-ink)]">Look after Latte</h2>
-                <div className="latte-actions grid grid-cols-2 gap-3">
+                <div className="latte-actions latte-grid2 grid gap-3">
                   <button
                     ref={feedBtnRef}
                     type="button"
@@ -892,7 +892,7 @@ export default function Latte() {
                   </button>
                   <button
                     type="button"
-                    className="px-btn px-btn--small col-span-2"
+                    className="px-btn px-btn--small col-span-full"
                     onClick={nap}
                   >
                     <PixelIcon art={st.asleep ? ICONS.wake : ICONS.nap} size={18} />

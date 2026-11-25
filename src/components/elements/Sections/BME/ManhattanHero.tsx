@@ -1,9 +1,7 @@
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { prefersReducedMotion } from '../../../../lib/motion';
-
-gsap.registerPlugin(ScrollTrigger);
+import { holdScrollTrigger, ScrollTrigger } from '../../../../lib/scrollTrigger';
 
 interface Particle {
   ix: number;
@@ -273,6 +271,9 @@ export function ManhattanHero() {
     let H = 1;
     let rafId = 0;
     let refreshId = 0;
+    // Reduced motion draws one still frame and makes no ScrollTriggers, so it
+    // must not refresh (and thereby start) ScrollTrigger either.
+    const reduced = prefersReducedMotion();
 
     const rebuild = () => {
       const rect = wrap.getBoundingClientRect();
@@ -288,6 +289,7 @@ export function ManhattanHero() {
 
       ptRef.current = buildSkylineParticles(W, H);
 
+      if (reduced) return;
       cancelAnimationFrame(refreshId);
       refreshId = requestAnimationFrame(() => ScrollTrigger.refresh());
     };
@@ -376,7 +378,7 @@ export function ManhattanHero() {
     };
 
     // Reduced motion: render the completed plot once, no scroll-scrubbed animation or loop.
-    if (prefersReducedMotion()) {
+    if (reduced) {
       progRef.current.value = 1;
       renderFrame(0);
       const ro = new ResizeObserver(() => {
@@ -391,6 +393,7 @@ export function ManhattanHero() {
       };
     }
 
+    const release = holdScrollTrigger();
     const gsapContext = gsap.context(() => {
       gsap.timeline({
         scrollTrigger: {
@@ -451,6 +454,7 @@ export function ManhattanHero() {
       io.disconnect();
       resizeObserver.disconnect();
       gsapContext.revert();
+      release();
     };
   }, []);
 

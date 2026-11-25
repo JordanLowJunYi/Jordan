@@ -114,11 +114,16 @@
 }
 
 /* ---------- Page pieces ---------- */
+/* Headers, strips and banners keep their height; the canvas between them is
+   what grows and shrinks. (The floor strip scrolls sideways, which let it be
+   squashed to a sliver on a landscape phone, clipping the floor buttons.) */
 .mp-head {
+  flex-shrink: 0;
   border-bottom: 3px solid var(--px-faint);
   background: #000;
 }
 .mp-strip {
+  flex-shrink: 0;
   border-top: 3px solid var(--px-faint);
   background: #000;
 }
@@ -154,6 +159,16 @@
   text-transform: uppercase;
   color: var(--px-dim);
   overflow-wrap: anywhere;
+}
+/* Narrow phones: four tiles in a row left "VERTICAL" a pixel or ten too
+   narrow, so it broke into VERTIC/AL. Tighter tiles and letters fit it whole. */
+@media (max-width: 420px) {
+  .mp-stat {
+    padding-inline: 0;
+  }
+  .mp-stat__label {
+    letter-spacing: 0.02em;
+  }
 }
 
 /* Floor buttons */
@@ -237,6 +252,7 @@
   border: 3px solid var(--px-green);
 }
 .mp-banner {
+  flex-shrink: 0;
   padding: 0.6rem 1rem;
   text-align: center;
   font-size: 0.9rem;

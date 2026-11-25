@@ -11,6 +11,13 @@
 }
 .g48--still { --slide: 0ms; }
 
+/* On a short window (a phone on its side) shrink the board to the window's
+   height, so the whole board is in view while you play. */
+.g48-stage {
+  max-width: max(240px, calc(100svh - 32px));
+  margin-inline: auto;
+}
+
 .g48-board {
   padding: var(--gap);
   touch-action: none;           /* swipes must not scroll the page */

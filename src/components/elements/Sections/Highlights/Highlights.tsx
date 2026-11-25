@@ -53,18 +53,21 @@ const Highlights: React.FC<{ section: HighlightsSection }> = ({ section }) => {
         <div className="text-center mb-12">
           <h1
             data-reveal
-            className="pb-3 text-5xl font-bold bg-gradient-to-r from-orange-300 via-pink-300 to-purple-300 bg-clip-text text-transparent"
+            className="pb-3 text-5xl font-bold break-words bg-gradient-to-r from-orange-300 via-pink-300 to-purple-300 bg-clip-text text-transparent"
           >
             {section.title}
           </h1>
         </div>
 
+        {/* min-w-0 + break-words on each card: with large text settings a long
+            word ("Gastroenterology") is wider than a phone, and the grid would
+            otherwise widen the card past the screen edge, where it is clipped. */}
         <div className="max-w-6xl mx-auto grid gap-6 md:grid-cols-12">
           {section.groups.map((group) => (
             <div
               key={group.heading}
               data-reveal
-              className={`rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-6 shadow-xl shadow-black/20 ${
+              className={`min-w-0 break-words rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-6 shadow-xl shadow-black/20 ${
                 SPAN_CLASS[group.span ?? (group.wide ? 12 : 6)]
               }`}
             >
@@ -104,7 +107,7 @@ const Highlights: React.FC<{ section: HighlightsSection }> = ({ section }) => {
                           href={entry.href}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block text-sm text-pink-300/80 hover:text-pink-200 transition-colors mt-0.5 w-fit"
+                          className="block text-sm text-pink-300/80 hover:text-pink-200 transition-colors mt-0.5 w-fit max-w-full break-all"
                         >
                           {entry.meta}
                         </a>

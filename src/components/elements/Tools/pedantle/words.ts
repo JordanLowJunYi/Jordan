@@ -93,7 +93,8 @@ export function normalizeGuess(raw: string): GuessCheck {
  */
 export function formsOf(key: string): string[] {
   const forms = new Set([key]);
-  for (const w of semanticMap[key] ?? []) forms.add(w);
+  // own keys only: "constructor" would otherwise find Object's and crash the guess
+  if (Object.prototype.hasOwnProperty.call(semanticMap, key)) for (const w of semanticMap[key]) forms.add(w);
   if (key.length >= 3) {
     // singular → plural
     if (/(?:s|x|z|ch|sh)$/.test(key)) forms.add(key + 'es');

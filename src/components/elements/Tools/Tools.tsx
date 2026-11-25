@@ -175,14 +175,16 @@ function Card({ game, featured = false }: { game: GameCard; featured?: boolean }
       to={game.to}
       onClick={() => sfx.select()}
       onMouseEnter={() => sfx.move()}
-      className={`arcade-card px-box px-box--accent px-accent-${game.accent} group relative flex h-full items-center gap-4 p-4 no-underline transition-transform duration-100 hover:-translate-y-1 focus-visible:-translate-y-1 focus-visible:outline-none ${
+      // flex-wrap + basis-28: with very large text the icon moves above the
+      // words instead of squeezing them into a sliver that spills out
+      className={`arcade-card px-box px-box--accent px-accent-${game.accent} group relative flex h-full flex-wrap items-center gap-4 p-4 no-underline transition-transform duration-100 hover:-translate-y-1 focus-visible:-translate-y-1 focus-visible:outline-none ${
         featured ? 'sm:gap-6 sm:p-6' : ''
       }`}
     >
       <span className="flex shrink-0 items-center justify-center bg-[#120f22] p-2" style={{ boxShadow: 'inset 0 0 0 3px #2c2645' }}>
         <PixelArt rows={icon.rows} palette={icon.palette} size={featured ? 88 : 56} />
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 grow basis-28 wrap-break-word">
         <span className="px-label block text-[var(--px-accent)]">{game.tag}</span>
         <span className={`block font-bold text-[var(--px-ink)] ${featured ? 'text-2xl sm:text-3xl' : 'text-xl'}`}>
           {game.title}
@@ -255,7 +257,10 @@ const Tools: React.FC = () => {
 
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
         <div className="mb-10 text-center">
-          <h1 className="px-title cursor-default text-5xl sm:text-6xl" onMouseEnter={() => setReplay((n) => n + 1)}>
+          <h1
+            className="px-title cursor-default text-5xl wrap-break-word sm:text-6xl"
+            onMouseEnter={() => setReplay((n) => n + 1)}
+          >
             <GlitchText text="JORDAN'S ARCADE" replayKey={replay} />
           </h1>
           <p className="mt-3 text-lg text-[var(--px-dim)]">Little games I've built. Pick one and press start.</p>

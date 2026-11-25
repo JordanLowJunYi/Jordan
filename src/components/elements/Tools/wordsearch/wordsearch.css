@@ -14,6 +14,13 @@
   outline-offset: 4px;
 }
 
+/* On a short window (a phone on its side) shrink the board to the window's
+   height, so a whole word can be dragged without scrolling mid-way. */
+.ws-stage {
+  max-width: max(260px, calc(100svh - 32px));
+  margin-inline: auto;
+}
+
 .ws-frame { padding: 6px; }
 @media (min-width: 640px) {
   .ws-frame { padding: 10px; }

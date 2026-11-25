@@ -140,6 +140,18 @@
   min-height: 2.6rem;
 }
 
+/* Two columns (needs, actions, food menu), dropping to one when a column
+   would be narrower than 7rem, e.g. with the text zoomed to 200% on a phone,
+   where the labels used to run into each other and out of the buttons. */
+.latte-grid2 {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(7rem, calc(50% - 0.6rem))), 1fr));
+}
+@media (min-width: 1024px) {
+  .latte-needs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .latte-thought {
     animation: none;

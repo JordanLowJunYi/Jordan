@@ -60,12 +60,15 @@ export function EarTraining({ names, letters }: { names: boolean; letters: boole
   const [marks, setMarks] = useState<ReadonlyMap<number, KeyMark>>(() => new Map());
   const [score, setScore] = useState({ right: 0, total: 0 });
   const [streak, setStreak] = useState(0);
-  const [best, setBest] = useState<Record<Difficulty, number>>(() => ({
-    white: 0,
-    all: 0,
-    interval: 0,
-    ...load<Partial<Record<Difficulty, number>>>('piano:best', {}),
-  }));
+  const [best, setBest] = useState<Record<Difficulty, number>>(() => {
+    // a hand-edited or old save might hold anything: keep whole numbers only
+    const saved = load<unknown>('piano:best', {});
+    const bestFor = (d: Difficulty) => {
+      const v = saved && typeof saved === 'object' ? (saved as Record<string, unknown>)[d] : 0;
+      return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0;
+    };
+    return { white: bestFor('white'), all: bestFor('all'), interval: bestFor('interval') };
+  });
   const [feedback, setFeedback] = useState<{ lines: string[]; good: boolean } | null>(null);
 
   // Refs so a burst of key presses in one tick only counts once.

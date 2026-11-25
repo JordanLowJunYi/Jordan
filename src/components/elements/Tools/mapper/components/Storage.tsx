@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { Upload, FolderOpen, HardDrive, FileJson, X, AlertCircle } from 'lucide-react';
-import { storageUtils } from '../utils/storage';
-import type { StorageProps, MapData, SavedMapInfo, MapNode, MapEdge, ExportedMapData, ExportedNode } from '../utils/types';
+import { normalizeMap, storageUtils } from '../utils/storage';
+import type { StorageProps, MapData, SavedMapInfo, MapNode, ExportedMapData } from '../utils/types';
 
 const Storage: React.FC<StorageProps> = ({ onLoadMap }) => {
   const [maps, setMaps] = useState<SavedMapInfo[]>([]);
@@ -132,7 +132,7 @@ const Storage: React.FC<StorageProps> = ({ onLoadMap }) => {
     setImportError('');
     setImportSuccess('');
 
-    if (!file.name.endsWith('.json')) {
+    if (!file.name.toLowerCase().endsWith('.json')) {
       setImportError('Please upload a JSON file');
       return;
     }
@@ -146,17 +146,27 @@ const Storage: React.FC<StorageProps> = ({ onLoadMap }) => {
           return;
         }
         
-        const data = JSON.parse(result) as Partial<ExportedMapData & MapData>;
-        
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(result);
+        } catch (err) {
+          setImportError(`Failed to parse JSON: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          return;
+        }
+        const data = parsed as Partial<ExportedMapData & MapData> | null;
+        // Cleaned-up copy: odd nodes/edges are fixed or dropped so they can't crash the other tabs.
+        const clean = normalizeMap(parsed);
+
         // Validate the imported data
-        if (!data.nodes && !data.edges && !data.metadata) {
+        if (!data || !clean || (!data.nodes && !data.edges && !data.metadata)) {
           setImportError('Invalid map format: missing nodes, edges, or metadata');
           return;
         }
 
         // Extract map name
-        const mapName = data.metadata?.building ||
-                      file.name.replace('.json', '').replace(/-\d{4}-\d{2}-\d{2}$/, '');
+        const building = typeof data.metadata?.building === 'string' ? data.metadata.building.trim() : '';
+        const mapName = building ||
+                      file.name.replace(/\.json$/i, '').replace(/-\d{4}-\d{2}-\d{2}$/, '') || 'Imported map';
         
         // Check if name already exists and append number if needed
         const existingMaps = storageUtils.getMapsList();
@@ -167,52 +177,32 @@ const Storage: React.FC<StorageProps> = ({ onLoadMap }) => {
           counter++;
         }
 
-        // Convert nodes from object format to array if needed
-        let nodesArray: MapNode[] = [];
-        if (data.nodes) {
-          if (Array.isArray(data.nodes)) {
-            nodesArray = data.nodes as MapNode[];
-          } else {
-            // Convert object format { id: nodeData } to array
-            nodesArray = Object.entries(data.nodes as { [id: string]: ExportedNode }).map(([id, node]) => ({
-              id,
-              name: node.name,
-              type: node.type,
-              aliases: node.aliases || [],
-              floor: node.floor,
-              x: node.coordinates?.x ?? 0,
-              y: node.coordinates?.y ?? 0,
-              z: node.coordinates?.z ?? 0,
-              lat: node.gps?.lat ?? null,
-              lng: node.gps?.lng ?? null,
-            }));
-          }
-        }
-
-        // Convert edges, handling pathPoints vs points
-        const edgesArray: MapEdge[] = (data.edges || []).map(e => ({
-          ...e,
-          points: e.pathPoints || e.points || []
-        }));
+        // Nodes as an array (exported files key them by id) and edges with
+        // `points` (exported files call them pathPoints): normalizeMap did both.
+        const nodesArray = clean.nodes as MapNode[];
+        const edgesArray = clean.edges;
 
         // Build the map data structure
         const mapData: MapData = {
           name: finalName,
           nodes: nodesArray,
           edges: edgesArray,
-          graph: data.graph || {},
+          graph: clean.graph || {},
           metadata: {
-            ...data.metadata,
+            ...clean.metadata,
             importedAt: new Date().toISOString(),
             originalFile: file.name
           },
           savedAt: new Date().toISOString()
         };
 
-        // Save to storage
-        storageUtils.saveMap(finalName, mapData);
+        // Save to storage (it fails when the browser's storage is full)
+        if (!storageUtils.saveMap(finalName, mapData)) {
+          setImportError('Could not save the map: browser storage is full or blocked');
+          return;
+        }
         loadMaps();
-        
+
         setImportSuccess(`Successfully imported "${finalName}" with ${nodesArray.length} nodes and ${edgesArray.length} edges`);
         
         // Clear success message after 5 seconds
@@ -220,7 +210,7 @@ const Storage: React.FC<StorageProps> = ({ onLoadMap }) => {
         
       } catch (err) {
         console.error('Import error:', err);
-        setImportError(`Failed to parse JSON: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setImportError(`Failed to import the map: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     };
 

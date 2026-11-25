@@ -11,7 +11,10 @@ async function query(params: Record<string, string>, signal?: AbortSignal) {
   const qs = new URLSearchParams({ action: 'query', format: 'json', formatversion: '2', origin: '*', ...params });
   const res = await fetch(`${API}?${qs.toString()}`, { signal });
   if (!res.ok) throw new Error(`Wikipedia answered ${res.status}.`);
-  return res.json();
+  // a captive portal or proxy can answer with an HTML page instead
+  return res.json().catch(() => {
+    throw new Error("Wikipedia's reply didn't make sense. Check your connection and try again.");
+  });
 }
 
 /** Featured-article titles, in the category's own (alphabetical) order. */

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, type ChangeEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { MapPin, Navigation, Save, Play, Square as StopIcon, ZoomIn, ZoomOut, Home, Target } from 'lucide-react';
 import { useGPS } from '../utils/useGPS';
-import { useResizeTick } from '../utils/useResizeTick';
+import { fitCanvas, useResizeTick } from '../utils/useResizeTick';
 import { dist2d, dist3d, generateId } from '../utils/helpers';
+import { storageUtils } from '../utils/storage';
 import type { MapperProps, MapNode, MapEdge, PathPoint, ViewState, NodeForm, ToastState, NodeType, Graph, Coordinates } from '../utils/types';
 
 const NODE_PROXIMITY = 5;
@@ -13,13 +14,19 @@ const FLOORS: number[] = [-1, 1, 2, 3, 4, 5, 6];
 
 const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const resizeTick = useResizeTick();
+  const resizeTick = useResizeTick(canvasRef);
+  // the one pointer that is dragging the map (a second finger used to make it jump)
+  const panPointer = useRef<number | null>(null);
+  const toastTimer = useRef(0);
   const [currentFloor, setCurrentFloor] = useState<number>(1);
   const [nodes, setNodes] = useState<MapNode[]>([]);
   const [edges, setEdges] = useState<MapEdge[]>([]);
   const [recording, setRecording] = useState<boolean>(false);
   const [recPoints, setRecPoints] = useState<PathPoint[]>([]);
   const [recConnectedNodes, setRecConnectedNodes] = useState<string[]>([]);
+  // where in recPoints each connected node was reached, so every edge gets
+  // only its own stretch of the walk (not the whole recording)
+  const recConnectedAt = useRef<number[]>([]);
   const [lastPoint, setLastPoint] = useState<PathPoint | null>(null);
   const [totalDistance, setTotalDistance] = useState<number>(0);
   const [lastFloorZ, setLastFloorZ] = useState<number>(0);
@@ -50,8 +57,11 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
 
   const showToast = (message: string): void => {
     setToast({ show: true, message });
-    setTimeout(() => setToast({ show: false, message: '' }), 2500);
+    // restart the timer, so an earlier toast's timer can't hide this one early
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast({ show: false, message: '' }), 2500);
   };
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
   // Escape closes the Add Node dialog.
   useEffect(() => {
@@ -71,7 +81,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
         : Object.values(loadedMap.nodes || {});
       setNodes(nodesArray as MapNode[]);
       setEdges(loadedMap.edges || []);
-      setTotalDistance(loadedMap.metadata?.stats?.totalDistance || 0);
+      setTotalDistance(Number(loadedMap.metadata?.stats?.totalDistance) || 0);
     }
   }, [loadedMap]);
 
@@ -103,11 +113,12 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
       if (node.floor !== currentFloor) return;
       const d = dist2d(node, pos as Coordinates);
       if (d <= NODE_PROXIMITY && !recConnectedNodes.includes(node.id)) {
+        recConnectedAt.current.push(recPoints.length); // newPoint's index
         setRecConnectedNodes(prev => [...prev, node.id]);
         showToast(`✓ "${node.name}"`);
       }
     });
-  }, [gps.position, recording, gps.isActive, nodes, currentFloor, lastPoint, recConnectedNodes]);
+  }, [gps.position, recording, gps.isActive, nodes, currentFloor, lastPoint, recConnectedNodes, recPoints]);
 
   const toggleGPS = (): void => {
     if (gps.isActive) {
@@ -130,6 +141,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
     setRecording(true);
     setRecPoints([]);
     setRecConnectedNodes([]);
+    recConnectedAt.current = [];
     setLastPoint(null);
     showToast('🔴 Recording...');
   };
@@ -140,10 +152,11 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
     showToast(`Saved: ${recPoints.length} pts, ${recConnectedNodes.length} nodes`);
     setRecPoints([]);
     setRecConnectedNodes([]);
+    recConnectedAt.current = [];
   };
 
   const createEdges = (): void => {
-    if (recConnectedNodes.length < 2 || recPoints.length < 2) return;
+    if (recConnectedNodes.length < 2) return;
 
     const newEdges: MapEdge[] = [];
     for (let i = 0; i < recConnectedNodes.length - 1; i++) {
@@ -160,10 +173,17 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
       const toNode = nodes.find(n => n.id === toId);
       if (!fromNode || !toNode) continue;
 
-      // Calculate path distance
+      // Only the stretch walked between these two nodes. (Every edge used to
+      // get the whole recording, so A-B-C made A-B and B-C both as long as
+      // the full walk, and the shortest routes came out wrong.)
+      const a = recConnectedAt.current[i] ?? 0;
+      const b = recConnectedAt.current[i + 1] ?? recPoints.length - 1;
+      let segment = recPoints.slice(Math.min(a, b), Math.max(a, b) + 1);
+      // both nodes reached at the same spot: a straight line between them
+      if (segment.length < 2) segment = [fromNode, toNode];
       let pathDist = 0;
-      for (let j = 1; j < recPoints.length; j++) {
-        pathDist += dist3d(recPoints[j-1], recPoints[j]);
+      for (let j = 1; j < segment.length; j++) {
+        pathDist += dist3d(segment[j-1], segment[j]);
       }
 
       newEdges.push({
@@ -172,7 +192,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
         to: toId,
         floor: currentFloor,
         distance: Math.round(pathDist * 10) / 10,
-        points: recPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
+        points: segment.map(p => ({ x: p.x, y: p.y, z: p.z })),
         isVertical: false
       });
     }
@@ -208,6 +228,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
 
     // Add to current recording
     if (recording && !recConnectedNodes.includes(node.id)) {
+      recConnectedAt.current.push(Math.max(0, recPoints.length - 1)); // the latest point
       setRecConnectedNodes(prev => [...prev, node.id]);
     }
 
@@ -272,12 +293,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-
-    const W = canvas.width;
-    const H = canvas.height;
+    const { W, H } = fitCanvas(canvas, ctx);
     const cx = W / 2 + view.panX;
     const cy = H / 2 + view.panY;
     const scale = view.scale;
@@ -402,7 +418,18 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
   }));
 
   const handleSaveMap = (): void => {
-    const mapName = prompt('Enter map name:');
+    // Saving under a name that's taken used to replace that map silently:
+    // ask first, and offer a free name ("Library (2)") if they'd rather keep it.
+    const taken = new Set(storageUtils.getMapsList().map(m => m.name));
+    const freeName = (base: string): string => {
+      let n = 2;
+      while (taken.has(`${base} (${n})`)) n++;
+      return `${base} (${n})`;
+    };
+    let mapName = prompt('Enter map name:')?.trim();
+    while (mapName && taken.has(mapName) && !confirm(`A map called "${mapName}" is already saved. Replace it?`)) {
+      mapName = prompt('Choose another name for this map:', freeName(mapName))?.trim();
+    }
     if (!mapName) return;
 
     const mapData = {
@@ -442,13 +469,18 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
 
   // Pointer events (not mouse-only) so dragging pans on touch screens too; the
   // canvas has touch-action: none so the drag doesn't scroll the page instead.
+  // Only the first finger pans: with two, each one's moves were measured from
+  // the other's position and the map leapt about.
   const handleMouseDown = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (panPointer.current !== null) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    panPointer.current = e.pointerId;
     e.currentTarget.setPointerCapture?.(e.pointerId);
     setView(v => ({ ...v, isPanning: true, lastX: e.clientX, lastY: e.clientY }));
   };
 
   const handleMouseMove = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
-    if (!view.isPanning) return;
+    if (!view.isPanning || e.pointerId !== panPointer.current) return;
     setView(v => ({
       ...v,
       panX: v.panX + e.clientX - v.lastX,
@@ -458,11 +490,9 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
     }));
   };
 
-  const handleMouseUp = (): void => {
-    setView(v => ({ ...v, isPanning: false }));
-  };
-
-  const handleMouseLeave = (): void => {
+  const handleMouseUp = (e: ReactPointerEvent<HTMLCanvasElement>): void => {
+    if (e.pointerId !== panPointer.current) return;
+    panPointer.current = null;
     setView(v => ({ ...v, isPanning: false }));
   };
 
@@ -476,7 +506,8 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
       )}
 
       {/* Map */}
-      <div className="relative min-h-[11rem] flex-1">
+      {/* tall enough for the four map buttons on a landscape phone */}
+      <div className="relative min-h-[13rem] flex-1">
         <canvas
           ref={canvasRef}
           role="img"
@@ -485,7 +516,8 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
           onPointerDown={handleMouseDown}
           onPointerMove={handleMouseMove}
           onPointerUp={handleMouseUp}
-          onPointerCancel={handleMouseLeave}
+          onPointerCancel={handleMouseUp}
+          onLostPointerCapture={handleMouseUp}
         />
 
         {/* Map Controls */}
@@ -534,7 +566,7 @@ const Mapper: React.FC<MapperProps> = ({ onSave, loadedMap, active = true }) => 
 
       {/* Z Indicator */}
       {showFloorHint && (
-        <div className="mx-3 my-3 border-[3px] border-[var(--px-amber)] bg-black p-3 text-sm text-[var(--px-amber)] sm:mx-4" role="status">
+        <div className="mx-3 my-3 shrink-0 border-[3px] border-[var(--px-amber)] bg-black p-3 text-sm text-[var(--px-amber)] sm:mx-4" role="status">
           ⬆ Altitude changed! Consider updating the floor.
         </div>
       )}

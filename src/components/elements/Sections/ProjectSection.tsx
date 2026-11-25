@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import DNA from '../../standards/backgrounds/DNA';
 import { useReveal } from '../../../lib/useReveal';
 import { prefersReducedMotion } from '../../../lib/motion';
+import { useMediaQuery } from '../../../lib/useMediaQuery';
+import { useSlickFocusGuard } from '../../../lib/useSlickFocusGuard';
 import Semiconductor from '../../standards/backgrounds/Semiconductor';
 import Standard from '../../standards/backgrounds/Standard';
 import { ManhattanHero } from './BME/ManhattanHero';
@@ -59,45 +61,29 @@ function CardVisual({ card }: { card: ProjectCard }) {
   );
 }
 
-// Props react-slick injects onto each slide element via cloneElement (layout +
-// accessibility). We declare them so we can forward them onto the real DOM node.
-type SlideInjectedProps = {
-  className?: string;
-  style?: React.CSSProperties;
-  'aria-hidden'?: boolean | 'true' | 'false';
-  'data-index'?: number;
-};
-
 /**
  * A compact carousel slide: just the visual and the title. Clicking (or pressing
  * Enter/Space on) it opens the full description in a modal.
  *
- * react-slick clones each slide and injects className (slick-slide/-active/
- * -cloned), a per-slide width style, and aria-hidden for off-screen/cloned
- * slides. We forward those onto the slide's root element so slick's own sizing
- * and hiding actually take effect, and we mirror aria-hidden onto the inner
- * button's tabIndex so keyboard focus never lands on a hidden or duplicated tile.
+ * react-slick wraps each slide in divs of its own and passes this element only
+ * a width style, which we forward. Its aria-hidden for off-screen and cloned
+ * slides lands on those wrappers, so useSlickFocusGuard keeps hidden tiles out
+ * of the Tab order.
  */
 function ProjectCardTile({
   card,
   onOpen,
-  ...slide
+  style,
 }: {
   card: ProjectCard;
   onOpen: (e: React.MouseEvent<HTMLButtonElement>) => void;
-} & SlideInjectedProps) {
-  const hidden = slide['aria-hidden'] === true || slide['aria-hidden'] === 'true';
+  style?: React.CSSProperties;
+}) {
   return (
-    <div
-      className={`${slide.className ?? ''} px-3 pb-2`}
-      style={slide.style}
-      data-index={slide['data-index']}
-      aria-hidden={hidden || undefined}
-    >
+    <div className="px-3 pb-2" style={style}>
       <button
         type="button"
         onClick={onOpen}
-        tabIndex={hidden ? -1 : 0}
         aria-haspopup="dialog"
         className="group relative block w-full h-80 sm:h-[22rem] overflow-hidden rounded-3xl border border-pink-500/30 shadow-2xl shadow-pink-500/10 bg-gradient-to-br from-pink-900/40 to-purple-900/30 backdrop-blur-md text-left transition-transform duration-300 hover:-translate-y-1 focus-visible:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/70"
       >
@@ -170,14 +156,18 @@ function ProjectModal({
       }
     };
 
-    // Scroll-lock the page behind the dialog.
+    // Scroll-lock the page behind the dialog, and hide the floating menu button
+    // and music switch (see action.css), which otherwise sit over the close
+    // button on phones and take its taps.
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.body.dataset.overlayOpen = 'true';
     document.addEventListener('keydown', onKeyDown);
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = prevOverflow;
+      delete document.body.dataset.overlayOpen;
       previouslyFocused?.focus?.();
     };
   }, [onClose]);
@@ -197,11 +187,9 @@ function ProjectModal({
       />
 
       {/* Panel */}
-      <div
-        ref={panelRef}
-        className="relative z-10 w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-3xl border border-pink-500/30 shadow-2xl shadow-pink-500/20 bg-gradient-to-br from-pink-950/90 to-purple-950/90 backdrop-blur-md"
-      >
-        {/* Close */}
+      <div ref={panelRef} className="relative z-10 w-full max-w-5xl">
+        {/* Close. It sits outside the scrolling box below, so it stays in reach
+            after scrolling down through the details on a phone. */}
         <button
           type="button"
           data-autofocus
@@ -214,42 +202,44 @@ function ProjectModal({
           </span>
         </button>
 
-        <div className="flex flex-col lg:flex-row">
-          {/* Visual */}
-          <div className="lg:w-1/2 h-64 sm:h-80 lg:h-auto lg:min-h-[420px] relative overflow-hidden">
-            <CardVisual card={card} />
-          </div>
-
-          {/* Details */}
-          <div className="lg:w-1/2 p-8 flex flex-col justify-center">
-            <div className="mb-6">
-              <h2 id={titleId} className="text-3xl font-bold text-white mb-2">
-                {card.title}
-              </h2>
-              <p className="text-gray-400 text-lg">{card.subtitle}</p>
+        <div className="max-h-[90vh] overflow-y-auto rounded-3xl border border-pink-500/30 shadow-2xl shadow-pink-500/20 bg-gradient-to-br from-pink-950/90 to-purple-950/90 backdrop-blur-md">
+          <div className="flex flex-col lg:flex-row">
+            {/* Visual */}
+            <div className="lg:w-1/2 h-64 sm:h-80 lg:h-auto lg:min-h-[420px] relative overflow-hidden">
+              <CardVisual card={card} />
             </div>
 
-            <div>
-              <h3 className="text-xl font-semibold text-pink-100 mb-4">{featuresLabel}</h3>
-              <ul className="space-y-3 text-gray-300 text-base leading-relaxed">
-                {card.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start gap-3">
-                    <span className="text-pink-400 mt-1">•</span>
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
+            {/* Details */}
+            <div className="lg:w-1/2 p-8 flex flex-col justify-center">
+              <div className="mb-6">
+                <h2 id={titleId} className="text-3xl font-bold text-white mb-2">
+                  {card.title}
+                </h2>
+                <p className="text-gray-400 text-lg">{card.subtitle}</p>
+              </div>
 
-              {card.link && (
-                <a
-                  href={card.link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-5 text-pink-300 hover:text-pink-200 transition-colors underline underline-offset-4"
-                >
-                  {card.link.label} <span aria-hidden="true">→</span>
-                </a>
-              )}
+              <div>
+                <h3 className="text-xl font-semibold text-pink-100 mb-4">{featuresLabel}</h3>
+                <ul className="space-y-3 text-gray-300 text-base leading-relaxed">
+                  {card.features.map((feature, idx) => (
+                    <li key={idx} className="flex items-start gap-3">
+                      <span className="text-pink-400 mt-1">•</span>
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {card.link && (
+                  <a
+                    href={card.link.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-5 text-pink-300 hover:text-pink-200 transition-colors underline underline-offset-4"
+                  >
+                    {card.link.label} <span aria-hidden="true">→</span>
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -293,6 +283,8 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
   const [activeCard, setActiveCard] = useState<ProjectCard | null>(null);
   const featuresLabel = section.featuresLabel ?? 'Key Features';
   const sliderRef = useRef<Slider>(null);
+  const carouselRef = useRef<HTMLDivElement>(null);
+  useSlickFocusGuard(carouselRef);
 
   // Distinguish a click from a swipe: react-slick fires onClick even at the end
   // of a drag, so we track how far the pointer moved and ignore "clicks" that
@@ -328,11 +320,16 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
     setPlaying(!playing);
   };
 
+  // Cards side by side: 1 on phones, 2 on tablets, 3 on wide screens.
+  const isPhone = useMediaQuery('(max-width: 640px)');
+  const isTablet = useMediaQuery('(max-width: 1024px)');
+  const perView = Math.min(isPhone ? 1 : isTablet ? 2 : 3, cardCount);
+
   const settings = {
     dots: true,
     infinite: cardCount > 1,
     speed: 500,
-    slidesToShow: Math.min(3, cardCount),
+    slidesToShow: perView,
     slidesToScroll: 1,
     autoplay: autoplayEnabled,
     autoplaySpeed: 4000,
@@ -343,10 +340,6 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
     arrows: cardCount > 1,
     prevArrow: <CarouselArrow direction="prev" />,
     nextArrow: <CarouselArrow direction="next" />,
-    responsive: [
-      { breakpoint: 1024, settings: { slidesToShow: Math.min(2, cardCount) } },
-      { breakpoint: 640, settings: { slidesToShow: 1 } },
-    ],
   };
 
   return (
@@ -362,9 +355,11 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
       {/* Content */}
       <div className="relative z-10 flex min-h-screen flex-col justify-center py-20 px-6">
         <div className="text-center mb-12">
+          {/* break-words: with large text settings one long word can be wider
+              than a phone, and the section would clip it */}
           <h1
             data-reveal
-            className="pb-3 text-5xl font-bold bg-gradient-to-r from-pink-300 via-purple-300 to-cyan-300 bg-clip-text text-transparent"
+            className="pb-3 text-5xl font-bold break-words bg-gradient-to-r from-pink-300 via-purple-300 to-cyan-300 bg-clip-text text-transparent"
           >
             {section.title}
           </h1>
@@ -374,6 +369,7 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
         </div>
 
         <div
+          ref={carouselRef}
           data-reveal
           className="project-carousel relative w-full max-w-6xl mx-auto px-8 sm:px-12 pb-16"
           onPointerDownCapture={(e) => {
@@ -395,6 +391,8 @@ const ProjectSection: React.FC<{ section: ProjectsSection }> = ({ section }) => 
             .project-carousel .slick-dots li button:before { font-size: 11px; color: #f472b6; opacity: 0.45; }
             .project-carousel .slick-dots li.slick-active button:before { color: #f472b6; opacity: 1; }
             .project-carousel .slick-dots li button:hover:before { opacity: 0.75; }
+            .project-carousel .slick-dots li button:focus-visible { outline: 2px solid #f472b6; outline-offset: -2px; border-radius: 9999px; }
+            .project-carousel .slick-dots li button:focus-visible:before { opacity: 1; }
           `}</style>
           <Slider ref={sliderRef} {...settings}>
             {section.cards.map((card) => (

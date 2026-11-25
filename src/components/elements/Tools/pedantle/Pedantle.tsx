@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import confetti from 'canvas-confetti';
 import { ExternalLink } from 'lucide-react';
 import { DialogueBox, GameShell, load, save, sfx, tone, type Choice } from '../arcade';
@@ -67,6 +67,20 @@ function celebrate() {
   });
 }
 
+// Wide enough for the guess list to sit beside the article (Tailwind's lg).
+const WIDE = '(min-width: 1024px)';
+function useWide(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia?.(WIDE);
+      mq?.addEventListener('change', cb);
+      return () => mq?.removeEventListener('change', cb);
+    },
+    () => window.matchMedia?.(WIDE).matches ?? true,
+    () => true,
+  );
+}
+
 function Loading() {
   return (
     <div className="px-box mx-auto mt-4 max-w-md p-6 text-center" role="status">
@@ -93,7 +107,15 @@ export default function Pedantle() {
   const [scrollTick, setScrollTick] = useState(0); // bumps to scroll to the highlighted words
   const [sort, setSort] = useState<'newest' | 'hits'>('newest');
   const [dialog, setDialog] = useState<Dialog | null>(null);
-  const [listOpen, setListOpen] = useState(true);
+  // Phones and tablets: the guess list drops down from the sticky guess bar
+  // (it used to sit under the whole article, thousands of pixels down).
+  const wide = useWide();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerBtnRef = useRef<HTMLButtonElement>(null);
+  // Another article on its way while this one stays on screen, and why it failed.
+  const [switching, setSwitching] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const shownRef = useRef(false);
   const lastRequest = useRef<Request>({ kind: 'daily' });
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -110,7 +132,13 @@ export default function Pedantle() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     lastRequest.current = req;
-    setStatus('loading');
+    // With an article already on screen, keep it there until the next one
+    // arrives, and if that fails just say so (it used to swap the article
+    // you were reading for an error box).
+    const keep = shownRef.current;
+    if (keep) setSwitching(true);
+    else setStatus('loading');
+    setNotice(null);
     setDialog(null);
     try {
       const title =
@@ -130,18 +158,25 @@ export default function Pedantle() {
       setFocusKey(null);
       setFeedback(null);
       setInput('');
+      setSwitching(false);
       setStatus('ready');
+      shownRef.current = true;
       save(CURRENT_KEY, src === 'random' ? { day: todayKey(), title: next.title } : null);
     } catch (err) {
       if (ctrl.signal.aborted) return;
-      setError(
+      const message =
         err instanceof TypeError
           ? "Couldn't reach Wikipedia. Check your connection and try again."
           : err instanceof Error
             ? err.message
-            : 'Something went wrong.',
-      );
-      setStatus('error');
+            : 'Something went wrong.';
+      if (keep) {
+        setSwitching(false);
+        setNotice(message);
+      } else {
+        setError(message);
+        setStatus('error');
+      }
     }
   }, []);
 
@@ -275,6 +310,8 @@ export default function Pedantle() {
 
   const showGuess = (key: string) => {
     sfx.move();
+    // close the drop-down list so the highlighted words aren't hidden behind it
+    if (!wide) setDrawerOpen(false);
     setFocusKey(key);
     setFlash((f) => f + 1);
     setScrollTick((t) => t + 1);
@@ -340,6 +377,57 @@ export default function Pedantle() {
       ? `Solved in ${guesses.length} ${guesses.length === 1 ? 'guess' : 'guesses'}.`
       : 'You gave up on this one. The whole article is revealed.'
     : 'Type a word and press Enter. Click a bar to count its letters.';
+
+  // The list of guesses: in the side panel on wide screens, in the guess
+  // bar's drop-down on phones and tablets (only one is ever on the page).
+  const guessList = (
+    <>
+      {rows.length > 1 && (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Sort guesses">
+          <button
+            type="button"
+            className="px-btn px-btn--small"
+            aria-pressed={sort === 'newest'}
+            onClick={() => setSort('newest')}
+          >
+            Newest
+          </button>
+          <button
+            type="button"
+            className="px-btn px-btn--small"
+            aria-pressed={sort === 'hits'}
+            onClick={() => setSort('hits')}
+          >
+            Most hits
+          </button>
+        </div>
+      )}
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-[var(--px-dim)]">No guesses yet. Common words like “the” are a good start.</p>
+      ) : (
+        <ol className="mt-3 space-y-0.5">
+          {sortedRows.map((r) => (
+            <li key={r.key}>
+              <button
+                type="button"
+                className={r.hits ? 'pd-guess' : 'pd-guess pd-guess--miss'}
+                aria-pressed={focusKey === r.key}
+                title={r.hits ? 'Highlight and jump to it' : 'Not in the article'}
+                onClick={() => showGuess(r.key)}
+              >
+                <span className="pd-guess__n">#{r.n}</span>
+                <span className="pd-guess__word">{r.key}</span>
+                <span className="pd-guess__hits">
+                  {r.hits}
+                  <span className="sr-only"> {r.hits === 1 ? 'match' : 'matches'}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
+  );
 
   return (
     <GameShell
@@ -424,18 +512,44 @@ export default function Pedantle() {
                   </button>
                 )}
               </div>
+              {switching && (
+                <p className="mt-3 text-sm text-[var(--px-dim)]" role="status">
+                  Fetching another article…
+                </p>
+              )}
+              {notice && (
+                <div className="pd-notice mt-4" role="alert">
+                  <p className="px-label pd-notice__label">Couldn't load that article</p>
+                  <p className="mt-1">{notice} This one is still here to play.</p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button type="button" className="px-btn px-btn--small" onClick={() => void open(lastRequest.current)}>
+                      Retry
+                    </button>
+                    <button
+                      type="button"
+                      className="px-btn px-btn--small"
+                      onClick={() => {
+                        sfx.back();
+                        setNotice(null);
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Guess bar: sticks to the top of the screen while you scroll the article */}
             <div className="pd-bar">
-              <form className="flex gap-2" onSubmit={submit} aria-label="Guess a word">
+              <form className="flex flex-wrap gap-2" onSubmit={submit} aria-label="Guess a word">
                 <label htmlFor="pd-guess" className="sr-only">
                   Guess a word
                 </label>
                 <input
                   ref={inputRef}
                   id="pd-guess"
-                  className="px-input min-w-0 flex-1"
+                  className="px-input min-w-[8rem] flex-1"
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -452,17 +566,50 @@ export default function Pedantle() {
                   Guess
                 </button>
               </form>
-              <div className="mt-1.5 flex items-baseline justify-between gap-3 text-sm">
+              <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
                 <p className="pd-feedback" data-tone={feedback?.tone} role="status">
                   {feedback?.text ?? idleHint}
                 </p>
-                <p className="px-label shrink-0">
-                  Guesses <span className="text-[var(--px-ink)]">{guesses.length}</span>
-                </p>
+                {wide ? (
+                  <p className="px-label shrink-0">
+                    Guesses <span className="text-[var(--px-ink)]">{guesses.length}</span>
+                  </p>
+                ) : (
+                  <button
+                    ref={drawerBtnRef}
+                    type="button"
+                    className="px-btn px-btn--small shrink-0"
+                    aria-expanded={drawerOpen}
+                    aria-controls="pd-drawer"
+                    onClick={() => {
+                      sfx.move();
+                      setDrawerOpen((o) => !o);
+                    }}
+                  >
+                    Guesses <span className="text-[var(--px-ink)]">{guesses.length}</span>
+                    <span aria-hidden="true">{drawerOpen ? '▲' : '▼'}</span>
+                  </button>
+                )}
               </div>
+              {!wide && drawerOpen && (
+                <div
+                  id="pd-drawer"
+                  className="pd-drawer"
+                  role="region"
+                  aria-label="Your guesses"
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Escape') return;
+                    e.stopPropagation();
+                    setDrawerOpen(false);
+                    drawerBtnRef.current?.focus();
+                  }}
+                >
+                  {guessList}
+                </div>
+              )}
             </div>
 
-            <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_15rem]">
+            <div className="mt-6 grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_15rem]">
               <section className="px-box px-box--soft min-w-0 p-4 sm:p-6" aria-label="Article">
                 {parsed.paragraphs.length > 0 ? (
                   <Article
@@ -478,72 +625,16 @@ export default function Pedantle() {
                 )}
               </section>
 
-              {/* Guesses: beside the article on wide screens, under it on phones */}
-              <aside className="pd-guesses px-box px-box--soft p-3" aria-labelledby="pd-guesses-h">
-                <div className="flex items-center justify-between gap-2">
+              {/* Guesses beside the article on wide screens; on phones and
+                  tablets they drop down from the guess bar instead */}
+              {wide && (
+                <aside className="pd-guesses px-box px-box--soft p-3" aria-labelledby="pd-guesses-h">
                   <h2 id="pd-guesses-h" className="px-label">
                     Guesses ({guesses.length})
                   </h2>
-                  {/* wrapper carries lg:hidden: .px-btn's own display would beat the utility */}
-                  <div className="lg:hidden">
-                    <button
-                      type="button"
-                      className="px-btn px-btn--small"
-                      aria-expanded={listOpen}
-                      aria-controls="pd-guess-list"
-                      onClick={() => setListOpen((o) => !o)}
-                    >
-                      {listOpen ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                </div>
-                <div id="pd-guess-list" className={listOpen ? '' : 'hidden lg:block'}>
-                  {rows.length > 1 && (
-                    <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Sort guesses">
-                      <button
-                        type="button"
-                        className="px-btn px-btn--small"
-                        aria-pressed={sort === 'newest'}
-                        onClick={() => setSort('newest')}
-                      >
-                        Newest
-                      </button>
-                      <button
-                        type="button"
-                        className="px-btn px-btn--small"
-                        aria-pressed={sort === 'hits'}
-                        onClick={() => setSort('hits')}
-                      >
-                        Most hits
-                      </button>
-                    </div>
-                  )}
-                  {rows.length === 0 ? (
-                    <p className="mt-3 text-sm text-[var(--px-dim)]">No guesses yet. Common words like “the” are a good start.</p>
-                  ) : (
-                    <ol className="mt-3 space-y-0.5">
-                      {sortedRows.map((r) => (
-                        <li key={r.key}>
-                          <button
-                            type="button"
-                            className={r.hits ? 'pd-guess' : 'pd-guess pd-guess--miss'}
-                            aria-pressed={focusKey === r.key}
-                            title={r.hits ? 'Highlight and jump to it' : 'Not in the article'}
-                            onClick={() => showGuess(r.key)}
-                          >
-                            <span className="pd-guess__n">#{r.n}</span>
-                            <span className="pd-guess__word">{r.key}</span>
-                            <span className="pd-guess__hits">
-                              {r.hits}
-                              <span className="sr-only"> {r.hits === 1 ? 'match' : 'matches'}</span>
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-              </aside>
+                  {guessList}
+                </aside>
+              )}
             </div>
           </>
         )}
@@ -551,14 +642,14 @@ export default function Pedantle() {
 
       {dialog && page && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 px-4 pb-6 sm:pb-10"
+          className="fixed inset-0 z-50 flex flex-col items-center overflow-y-auto bg-black/50 px-4 pb-6 pt-4 sm:pb-10"
           onClick={(e) => {
             if (e.target !== e.currentTarget) return;
             sfx.back();
             closeDialog();
           }}
         >
-          <DialogueBox className="w-full max-w-2xl" speaker="Librarian" lines={lines} choices={choices} />
+          <DialogueBox className="mt-auto w-full max-w-2xl shrink-0" speaker="Librarian" lines={lines} choices={choices} />
         </div>
       )}
     </GameShell>

@@ -6,7 +6,8 @@ import { useSyncExternalStore } from 'react';
 import { load, save } from './storage';
 
 let ctx: AudioContext | null = null;
-let muted = load<boolean>('muted', false);
+// only a saved `true` mutes, so a garbled value can't leave mute half-on
+let muted = load<unknown>('muted', false) === true;
 const listeners = new Set<() => void>();
 
 export function audioContext(): AudioContext | null {

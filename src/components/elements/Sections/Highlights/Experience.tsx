@@ -1,14 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { FileText } from 'lucide-react';
 import { prefersReducedMotion } from '../../../../lib/motion';
+import { holdScrollTrigger } from '../../../../lib/scrollTrigger';
 import { formatSpan, formatTotal } from '../../../../lib/dates';
 import TestimonialPanel from './TestimonialPanel';
 import type { Testimonial } from './TestimonialPanel';
 import type { ExperienceOrg, ExperienceRole } from '../../../../content/siteContent';
-
-gsap.registerPlugin(ScrollTrigger);
 
 function Role({
   role,
@@ -74,6 +72,7 @@ const Experience: React.FC<{ orgs: ExperienceOrg[] }> = ({ orgs }) => {
     // Reduced motion: leave the markup in its natural, fully visible state.
     if (!root || prefersReducedMotion()) return;
 
+    const release = holdScrollTrigger();
     const ctx = gsap.context(() => {
       root.querySelectorAll<HTMLElement>('[data-exp-org]').forEach((org) => {
         const line = org.querySelector<HTMLElement>('[data-exp-line]');
@@ -99,7 +98,10 @@ const Experience: React.FC<{ orgs: ExperienceOrg[] }> = ({ orgs }) => {
       });
     }, root);
 
-    return () => ctx.revert();
+    return () => {
+      ctx.revert();
+      release();
+    };
   }, []);
 
   return (

@@ -2,6 +2,7 @@ import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
+import { staticPages } from './vite.pages'
 
 /**
  * GitHub Pages serves a project site from /<repo-name>/, and that prefix has to be
@@ -38,5 +39,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    staticPages(),
   ],
 })

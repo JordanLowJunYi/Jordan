@@ -10,8 +10,16 @@ import { sections } from '../content/siteContent';
 // The music switch and its song load after the page, in their own chunk.
 const HomeMusic = lazy(() => import('./elements/HomeMusic/HomeMusic'));
 
+// Same as the <title> in index.html. Each arcade page now ships with its own
+// title, so a visit that starts on a game must set this one when it comes home.
+const HOME_TITLE = 'Jordan Low Jun Yi | Biomedical Engineering + Computing @ NUS';
+
 const Doux: React.FC = () => {
   const { hash } = useLocation();
+
+  useEffect(() => {
+    document.title = HOME_TITLE;
+  }, []);
 
   // Arriving with a #section (e.g. from a game in the arcade) scrolls to it
   // once the page has rendered.
